@@ -21,7 +21,7 @@ export default function Home() {
           </label>
           <input
             type="number"
-            className="shadow border rounded w-full py-2 px-3 text-gray-700"
+            className="shadow border rounded w-full py-2 px-3 text-white-700"
             placeholder="Enter price in local currency"
           />
         </div>
