@@ -4,7 +4,7 @@ export default function Home() {
       <h1 className="text-3xl font-bold mb-6">Global Property Calculator</h1>
       <form className="w-full max-w-md">
         <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">
+          <label className="block text-white-700 text-sm font-bold mb-2">
             Country
           </label>
           <select className="shadow border rounded w-full py-2 px-3 text-white-700">
