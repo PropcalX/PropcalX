@@ -7,7 +7,7 @@ export default function Home() {
           <label className="block text-gray-700 text-sm font-bold mb-2">
             Country
           </label>
-          <select className="shadow border rounded w-full py-2 px-3 text-gray-700">
+          <select className="shadow border rounded w-full py-2 px-3 text-white-700">
             <option>United Kingdom</option>
             <option>Dubai</option>
             <option>Japan</option>
@@ -16,7 +16,7 @@ export default function Home() {
           </select>
         </div>
         <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2">
+          <label className="block text-white-700 text-sm font-bold mb-2">
             Property Price
           </label>
           <input
@@ -26,12 +26,12 @@ export default function Home() {
           />
         </div>
         <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2">
+          <label className="block text-white-700 text-sm font-bold mb-2">
             Monthly Rent
           </label>
           <input
             type="number"
-            className="shadow border rounded w-full py-2 px-3 text-gray-700"
+            className="shadow border rounded w-full py-2 px-3 text-white-700"
             placeholder="Enter monthly rent"
           />
         </div>
