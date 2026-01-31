@@ -126,14 +126,14 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen p-6 flex flex-col items-center">
+    <main className="min-h-screen p-6 flex flex-col items-center bg-white text-black">
       <div className="w-full max-w-2xl">
         <h1 className="text-3xl font-bold mb-2">Global Property Calculator</h1>
         <p className="text-black-600 mb-6">
           MVP version: quick tax + yield estimate (you’ll refine country rules later).
         </p >
 
-        <form onSubmit={onCalculate} className="rounded-xl border p-4 shadow-sm bg-black">
+        <form onSubmit={onCalculate} className="rounded-xl border p-4 shadow-sm bg-white">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Country</label>
@@ -195,58 +195,58 @@ export default function Home() {
 
           <button
             type="submit"
-            className="mt-4 w-full rounded-lg bg-black text-white py-2 font-semibold"
+            className="mt-4 w-full rounded-lg bg-white text-black py-2 font-semibold"
           >
             Calculate
           </button>
         </form>
 
         {result && (
-          <div className="mt-6 rounded-xl border p-4 bg-black shadow-sm">
+          <div className="mt-6 rounded-xl border p-4 bg-white shadow-sm">
             <h2 className="text-xl font-semibold mb-3">Result</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Stam duty (estimate)</div>
                 <div className="text-lg font-semibold">
                   {formatMoney(result.purchaseTax, result.currency)}
                 </div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Other fees (estimate)</div>
                 <div className="text-lg font-semibold">
                   {formatMoney(result.otherFees, result.currency)}
                 </div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Total upfront costs</div>
                 <div className="text-lg font-semibold">
                   {formatMoney(result.totalUpfrontCosts, result.currency)}
                 </div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Gross annual rent</div>
                 <div className="text-lg font-semibold">
                   {formatMoney(result.grossAnnualRent, result.currency)}
                 </div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Net annual rent</div>
                 <div className="text-lg font-semibold">
                   {formatMoney(result.netAnnualRent, result.currency)}
                 </div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3">
+              <div className="rounded-lg bg-white-50 p-3">
                 <div className="text-gold-500">Net yield</div>
                 <div className="text-lg font-semibold">{result.netYield.toFixed(2)}%</div>
               </div>
 
-              <div className="rounded-lg bg-gold-50 p-3 md:col-span-2">
+              <div className="rounded-lg bg-white-50 p-3 md:col-span-2">
                 <div className="text-gold-500">ROI (net rent / total cash in)</div>
                 <div className="text-lg font-semibold">{result.roi.toFixed(2)}%</div>
               </div>
