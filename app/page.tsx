@@ -914,7 +914,7 @@ export default function Home() {
               }
               value={annualCostsStr}
               onChange={setAnnualCostsStr}
-              placeholder={purpose === "investment" ? "e.g. 4,500" : "e.g. 18,000"}
+              placeholder={lang === "zh" ? "例如：物业费，会计费" : "e.g. Service Charge, Accountant Fee"}
             />
 
             {/* Other one-off: investment only */}
