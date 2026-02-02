@@ -133,7 +133,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     owner_total: "Total Annual Running Costs",
     owner_council_tax: "Council / Municipal Tax (Estimated)",
     owner_utilities: "Utilities (Estimated)",
-    owner_property_tax: "Property / Land Tax (Estimated)",
+    owner_property_tax: "Property / Land Tax (Leasehold Estimated)",
     owner_service_charge: "Service charge (self-input)",
     owner_breakdown: "Annual Cost Breakdown",
 
@@ -315,7 +315,7 @@ function estimateUKCouncilTax(priceGBP: number) {
   return 3500;
 }
 function estimateUKUtilities() {
-  return 3000;
+  return 2000;
 }
 function estimateDubaiUtilities(priceAED: number) {
   return Math.round(Math.max(12000, priceAED * 0.004));
@@ -495,7 +495,7 @@ export default function Home() {
       if (country === "UK") {
         annualCouncilOrMunicipalTax = estimateUKCouncilTax(price);
         annualUtilities = estimateUKUtilities();
-        annualPropertyTax = 0;
+        annualPropertyTax = 250;
       } else if (country === "Dubai") {
         annualCouncilOrMunicipalTax = 0;
         annualUtilities = estimateDubaiUtilities(price);
