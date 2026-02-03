@@ -60,7 +60,7 @@ function formatMoney(n: number, currency: string) {
 const I18N: Record<Lang, Record<string, string>> = {
   en: {
     title: "Global Property Calculator",
-    subtitle: "Screenshot-ready ROI + costs (MVP).",
+    subtitle: "Your professional property calculator",
     language: "Language",
     en: "EN",
     zh: "中文",
@@ -151,7 +151,7 @@ const I18N: Record<Lang, Record<string, string>> = {
 
   zh: {
     title: "全球房产投资计算器",
-    subtitle: "可截图宣传的 ROI + 成本预估（MVP）。",
+    subtitle: "你的专业房产计算器",
     language: "语言",
     en: "EN",
     zh: "中文",
