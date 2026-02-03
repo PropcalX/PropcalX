@@ -113,7 +113,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     upfront_breakdown: "Upfront Cost Breakdown",
     estimate: "Estimate",
     purchase_tax: "Stamp Duty",
-    gov_admin_est: "Government / Admin Fees (Estimated)",
+    gov_admin_est: "Government / Solicitor Fees (Estimated)",
     other_oneoff_costs: "Other One-off Costs",
     total_upfront_costs: "Total Upfront Costs",
 
@@ -124,7 +124,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     disclaimer:
       "Disclaimer: Estimates only. Taxes/fees vary by buyer profile and local regulations.",
     note_est:
-      'Note: "Government / Admin Fees" are estimated for MVP and may differ by city, transaction type, and local rules.',
+      'Note: "Government / Solicitor Fees" are estimated for MVP and may differ by city, transaction type, and local rules.',
 
     // Owner results
     owner_title: "Estimated Annual Running Costs",
@@ -204,7 +204,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     upfront_breakdown: "前期成本明细",
     estimate: "预估",
     purchase_tax: "购置税费",
-    gov_admin_est: "政府/登记/行政费用（预估）",
+    gov_admin_est: "政府/律师/行政费用（预估）",
     other_oneoff_costs: "其他一次性费用",
     total_upfront_costs: "前期成本合计",
 
@@ -213,7 +213,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     breakdown: "构成",
 
     disclaimer: "免责声明：本结果为估算，仅供参考；税费可能因买家身份及当地法规而不同。",
-    note_est: "注：政府/登记/行政费用为MVP预估值，可能因城市、交易类型及当地规定而不同。",
+    note_est: "注：政府/律师/行政费用为MVP预估值，可能因城市、交易类型及当地规定而不同。",
 
     // Owner results
     owner_title: "年度固定支出（预估）",
@@ -298,7 +298,7 @@ function calcUKGovAdminFeesEstimate(priceGBP: number) {
   else if (priceGBP <= 1000000) landRegistry = 295;
   else landRegistry = 500;
 
-  const searchesAndAdmin = 350;
+  const searchesAndAdmin = 1500;
   return Math.round(landRegistry + searchesAndAdmin);
 }
 function calcThailandGovAdminFeesEstimate(priceTHB: number) {
