@@ -112,7 +112,7 @@ const I18N: Record<Lang, Record<string, string>> = {
 
     upfront_breakdown: "Upfront Cost Breakdown",
     estimate: "Estimate",
-    purchase_tax: "Purchase Tax",
+    purchase_tax: "Stamp Duty",
     gov_admin_est: "Government / Admin Fees (Estimated)",
     other_oneoff_costs: "Other One-off Costs",
     total_upfront_costs: "Total Upfront Costs",
@@ -246,9 +246,10 @@ function tFactory(lang: Lang) {
 // ------------------- Models (MVP) -------------------
 function calcUKSDLT(price: number, isAdditional: boolean, isOverseas: boolean): number {
   const bands = [
-    { upTo: 250000, rate: 0.0 },
+    { upTo: 125000, rate: 0.0 },
+    { upTo: 250000, rate: 0.02 },
     { upTo: 925000, rate: 0.05 },
-    { upTo: 1500000, rate: 0.1 },
+    { upTo: 1500000, rate: 0.10 },
     { upTo: Infinity, rate: 0.12 },
   ];
 
