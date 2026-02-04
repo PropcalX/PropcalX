@@ -1,1217 +1,1178 @@
 "use client";
+type CountryCode = "uk" | "uae" | "th" | "jp";
+type PurposeCode = "investment" | "owner";
 
-import React, { useMemo, useState } from "react";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-} from "chart.js";
-import { Doughnut, Bar } from "react-chartjs-2";
-
-ChartJS.register(
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title
-);
-
-type Country = "UK" | "Dubai" | "Thailand" | "Japan";
-type Purpose = "investment" | "owner";
-type Lang = "en" | "zh";
-type UKBuyerResidency = "uk_resident" | "overseas_buyer";
-type UKPropertyCount = "first_home" | "additional_home";
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
+function normalizeCountry(v: any): CountryCode {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (s === "uk" || s.includes("united kingdom") || s.includes("英国")) return "uk";
+  if (s === "uae" || s.includes("dubai") || s.includes("阿联酋") || s.includes("迪拜")) return "uae";
+  if (s === "th" || s.includes("thailand") || s.includes("泰国")) return "th";
+  if (s === "jp" || s.includes("japan") || s.includes("日本")) return "jp";
+  return "uk";
 }
 
-/** Accept "1,200,000" "1 200 000" "1200000" */
-function parseNumber(input: string): number {
-  const cleaned = (input || "")
-    .replace(/[,\s]/g, "")
-    .replace(/[^\d.]/g, "");
+function normalizePurpose(v: any): PurposeCode {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (s === "investment" || s.includes("投资")) return "investment";
+  if (s === "owner" || s.includes("自住")) return "owner";
+  // 默认按投资
+  return "investment";
+}
+
+function safeNumber(v: any): number {
+  // 兼容 420,000 / 420000 / "" / undefined
+  const s = String(v ?? "").replace(/,/g, "").trim();
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+import React, { useMemo, useState } from "react";
+
+type Lang = "en" | "zh";
+type Purpose = "investment" | "selfuse";
+type HomeCount = "first" | "additional";
+type Residency = "resident" | "nonResident";
+
+type Inputs = {
+  lang: Lang;
+  purpose: Purpose;
+  country: CountryCode;
+
+  // Optional metadata
+  region: string;
+  project: string;
+
+  // UK-only toggles (we keep them visible but meaningful mainly for UK)
+  homeCount: HomeCount;
+  residency: Residency;
+
+  // Core numbers (strings for input formatting)
+  price: string; // property price
+  monthlyRent: string; // investment only
+  agentFeePct: string; // investment
+  mortgagePct: string; // investment
+  aprPct: string; // investment
+  annualHoldingCosts: string; // can apply to both
+  otherOneOffCosts: string; // lawyer/furniture etc (both)
+
+  // self-use only extra
+  annualPropertyFeeSelf: string; // user input: service charge/management etc (if they want separate)
+};
+
+type Result = {
+  currency: string;
+
+  // One-off
+  stampDuty: number;
+  govSolicitorFeesEst: number;
+  otherOneOffCosts: number;
+  upfrontCosts: number;
+
+  // Finance (investment)
+  loanAmount: number;
+  cashDeposit: number;
+  interestAnnual: number;
+
+  // Investment outputs
+  grossAnnualRent: number;
+  agentFeeAnnual: number;
+  holdingAnnual: number;
+  netAnnualRent: number;
+  netYieldPct: number;
+  cashOnCashPct: number;
+
+  // Self-use outputs
+  councilTaxEst: number;
+  utilitiesEst: number;
+  propertyFeeSelf: number;
+  annualFixedOutgoings: number;
+  monthlyFixedOutgoings: number;
+  firstYearTotalOutgoings: number; // annual fixed + upfront
+
+  // Sensitivity (investment)
+  sensitivity: { apr: number; rentFactor: number; cocPct: number }[];
+};
+
+const CURRENCY_BY_COUNTRY: Record<CountryCode, string> = {
+  uk: "GBP",
+  uae: "AED",
+  th: "THB",
+  jp: "JPY",
+};
+
+const COUNTRY_NAME: Record<Lang, Record<CountryCode, string>> = {
+  en: { uk: "UK", uae: "UAE", th: "Thailand", jp: "Japan" },
+  zh: { uk: "英国", uae: "阿联酋", th: "泰国", jp: "日本" },
+};
+
+const UI = (lang: Lang) => {
+  const en = {
+    brand: "MyGPC",
+    title: "Global Property Calculator",
+    subtitle: "Screenshot-ready ROI + cost estimate (MVP).",
+
+    language: "Language",
+    purpose: "Purpose",
+    purposeInvestment: "Investment",
+    purposeSelfuse: "Owner-occupier (self-use)",
+
+    country: "Country",
+    region: "Region (optional)",
+    project: "Project (optional)",
+
+    price: "Property price",
+    monthlyRent: "Monthly rent",
+    homeCount: "Home count (UK)",
+    first: "First home",
+    additional: "Additional home",
+    residency: "Buyer residency (UK)",
+    resident: "Resident buyer",
+    nonResident: "Non-resident buyer",
+
+    agentFeePct: "Letting agent fee",
+    mortgagePct: "Mortgage",
+    aprPct: "APR",
+    annualHoldingCosts: "Annual holding costs (optional)",
+    otherOneOffCosts: "Other one-off costs (optional)",
+    otherPlaceholder: "e.g. lawyer + furniture pack",
+
+    propertyFeeSelf: "Property fee / service charge (self-use input)",
+
+    calc: "Calculate",
+
+    // Results labels
+    countryLabel: "Country",
+    currencyLabel: "Currency",
+    estimateTag: "Estimate",
+
+    // Investment headline
+    invTitle: "Estimated Cash-on-Cash ROI",
+    netYield: "Net yield (on price)",
+    netAnnualRent: "Net annual rent",
+    upfrontCosts: "Upfront costs",
+
+    grossAnnualRent: "Gross annual rent",
+    agentFeeAnnual: "Letting agent fee (annual)",
+    holdingAnnual: "Annual holding costs",
+    interestAnnual: "Annual interest cost",
+    loanAmount: "Loan amount",
+    cashDeposit: "Cash deposit",
+
+    breakdown: "Cost breakdown",
+    stampDuty: "Stamp Duty (SDLT)",
+    govFees: "Government / Solicitor fees (Estimated)",
+
+    annualCashflow: "Annual cashflow",
+
+    sensitivity: "Sensitivity (Rent vs APR)",
+    sensitivityHint: "Cash-on-Cash ROI (%) under Rent change × APR change. Interest-only assumed (MVP).",
+
+    // Self-use headline
+    selfTitle: "Estimated Outgoings (Self-use)",
+    annualFixed: "Annual fixed outgoings",
+    perMonth: "Per month",
+    firstYear: "First-year total outgoings",
+    councilTax: "Council tax (Estimated)",
+    utilities: "Utilities + broadband (Estimated)",
+    annualFixedHint: "Annual fixed outgoings exclude mortgage repayment (MVP).",
+
+    // Pro report
+    proTitle: "Pro Report (PDF)",
+    proHint: "Enter your email to generate and receive a branded PDF report.",
+    email: "Email",
+    send: "Get Pro Report",
+    sending: "Sending…",
+    sent: "Sent! Please check your email (PDF attached).",
+    failed: "Failed:",
+
+    disclaimer:
+      "Disclaimer: Estimates only. Taxes/fees vary by buyer profile and local regulations. This report is not financial advice.",
+    noteGov:
+      'Note: "Government / Solicitor fees" are estimated for MVP and may differ by city, transaction type, and local rules.',
+  };
+
+  const zh = {
+    brand: "MyGPC",
+    title: "全球房产投资计算器",
+    subtitle: "可截图宣传的 ROI + 成本预估（MVP）",
+
+    language: "语言",
+    purpose: "用途",
+    purposeInvestment: "投资",
+    purposeSelfuse: "自住",
+
+    country: "国家",
+    region: "区域（可选）",
+    project: "房产项目（可选）",
+
+    price: "房产价格",
+    monthlyRent: "月租金",
+    homeCount: "首套/二套（英国）",
+    first: "首套",
+    additional: "二套/多套",
+    residency: "买家身份（英国）",
+    resident: "本地买家",
+    nonResident: "海外买家",
+
+    agentFeePct: "租房中介费",
+    mortgagePct: "贷款比例",
+    aprPct: "年利率",
+    annualHoldingCosts: "年度持有成本（可选）",
+    otherOneOffCosts: "其他一次性费用（可选）",
+    otherPlaceholder: "例如：律师费、家具包等",
+
+    propertyFeeSelf: "物业费/管理费（自住自填）",
+
+    calc: "计算",
+
+    countryLabel: "国家",
+    currencyLabel: "币种",
+    estimateTag: "预估",
+
+    invTitle: "预估现金回报率（Cash-on-Cash ROI）",
+    netYield: "净回报率（按房价）",
+    netAnnualRent: "年度净租金",
+    upfrontCosts: "一次性成本合计",
+
+    grossAnnualRent: "年度总租金",
+    agentFeeAnnual: "租房中介费（年度）",
+    holdingAnnual: "年度持有成本",
+    interestAnnual: "年度利息成本",
+    loanAmount: "贷款额",
+    cashDeposit: "首付现金",
+
+    breakdown: "成本明细",
+    stampDuty: "印花税（SDLT）",
+    govFees: "政府/律师等费用（预估）",
+
+    annualCashflow: "年度现金流",
+
+    sensitivity: "敏感性分析（租金 vs 利率）",
+    sensitivityHint: "表格显示：租金变化 × 利率变化下的现金回报率（MVP 假设只算利息）。",
+
+    selfTitle: "预估支出（自住）",
+    annualFixed: "年度固定支出",
+    perMonth: "折合每月",
+    firstYear: "第一年总支出（固定 + 一次性）",
+    councilTax: "市政税/地方税（预估）",
+    utilities: "水电煤网费（预估）",
+    annualFixedHint: "年度固定支出不含按揭本金偿还（MVP）。",
+
+    proTitle: "专业报告（PDF）",
+    proHint: "填写邮箱，生成并发送带品牌的 PDF 报告。",
+    email: "邮箱",
+    send: "获取 Pro 报告",
+    sending: "发送中…",
+    sent: "已发送！请查收邮箱（PDF 附件）。",
+    failed: "发送失败：",
+
+    disclaimer:
+      "免责声明：仅为估算。税费随买家身份、城市、政策等变化。本报告不构成投资建议。",
+    noteGov:
+      "注：政府/律师等费用为MVP预估值，可能因城市、交易类型、当地规则而不同。",
+  };
+
+  return lang === "en" ? en : zh;
+};
+
+function clampPct(n: number) {
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function parseNum(text: string) {
+  if (!text) return 0;
+  const cleaned = text.replace(/,/g, "").replace(/[^\d.]/g, "");
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
-function formatThousands(n: number): string {
-  if (!Number.isFinite(n)) return "";
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(n);
+function formatThousandsInput(raw: string) {
+  const cleaned = raw.replace(/,/g, "").replace(/[^\d.]/g, "");
+  if (!cleaned) return "";
+  const parts = cleaned.split(".");
+  const intPart = parts[0];
+  const decPart = parts[1]?.slice(0, 2);
+  const withCommas = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
 }
 
-function formatMoney(n: number, currency: string) {
-  if (!Number.isFinite(n)) return "-";
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(n);
+function fmtMoney(n: number) {
+  const v = Number.isFinite(n) ? n : 0;
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(Math.round(v));
 }
 
-// ---------------- i18n ----------------
-const I18N: Record<Lang, Record<string, string>> = {
-  en: {
-    title: "Global Property Calculator",
-    subtitle: "Your professional property calculator",
-    language: "Language",
-    en: "EN",
-    zh: "中文",
-
-    purpose: "Purpose",
-    purpose_invest: "Investment",
-    purpose_owner: "Owner-occupied",
-
-    country: "Country",
-    UK: "UK",
-    Dubai: "Dubai (UAE)",
-    Thailand: "Thailand",
-    Japan: "Japan",
-
-    property_price: "Property Price",
-    buyer_residency: "Buyer residency",
-    uk_resident: "UK resident",
-    overseas_buyer: "Overseas buyer",
-    property_count: "Home count",
-    first_home: "First home",
-    additional_home: "Additional home",
-
-    monthly_rent: "Monthly Rent",
-    agent_fee_pct: "Letting agent fee (%)",
-    mortgage_pct: "Mortgage (%)",
-    interest_rate_pct: "APR (%)",
-
-    annual_holding: "Annual Holding Costs",
-    service_charge: "Service charge / management fee",
-    other_oneoff: "Other one-off costs",
-
-    optional: "(optional)",
-    self_input: "(self-input)",
-    calculate: "Calculate",
-
-    // Investment results
-    est_roi: "Estimated Cash-on-Cash ROI",
-    roi_formula: "Net annual rent ÷ (Deposit + Upfront Costs)",
-    net_yield: "Net Yield (on price)",
-    net_annual_rent: "Net Annual Rent",
-    upfront_costs: "Upfront Costs",
-
-    gross_annual_rent: "Gross Annual Rent",
-    letting_agent_fee_annual: "Letting Agent Fee (annual)",
-    annual_holding_costs: "Annual Holding Costs",
-    loan_amount: "Loan Amount",
-    cash_deposit: "Cash Deposit",
-    annual_interest_cost: "Annual Interest Cost",
-
-    upfront_breakdown: "Upfront Cost Breakdown",
-    estimate: "Estimate",
-    purchase_tax: "Stamp Duty",
-    gov_admin_est: "Government / Solicitor Fees (Estimated)",
-    other_oneoff_costs: "Other One-off Costs",
-    total_upfront_costs: "Total Upfront Costs",
-
-    annual_cashflow: "Annual Cashflow",
-    gross_vs_net: "Gross vs Net",
-    breakdown: "Breakdown",
-
-    disclaimer:
-      "Disclaimer: Estimates only. Taxes/fees vary by buyer profile and local regulations.",
-    note_est:
-      'Note: "Government / Solicitor Fees" are estimated for MVP and may differ by city, transaction type, and local rules.',
-
-    // Owner results
-    owner_title: "Estimated Annual Running Costs",
-    owner_sub: "Owner-occupied scenario (no rental income)",
-    per_month: "Per month",
-    owner_total: "Total Annual Running Costs",
-    owner_council_tax: "Council / Municipal Tax (Estimated)",
-    owner_utilities: "Utilities (Estimated)",
-    owner_property_tax: "Property / Land Tax (Leasehold Estimated)",
-    owner_service_charge: "Service charge (self-input)",
-    owner_breakdown: "Annual Cost Breakdown",
-
-    country_label: "Country",
-    currency_label: "Currency",
-
-    // CTA
-    pro_report: "Generate Pro Report (PDF)",
-    pro_hint: "Next: connect to Zapier to generate a branded PDF and email it.",
-    email_prompt: "Enter your email to receive the report:",
-    sending_ok: "Generating. Check your inbox in 1–2 minutes.",
-    sending_fail: "Failed. Try again.",
-    invalid_price: "Please enter a valid property price.",
-  },
-
-  zh: {
-    title: "全球房产投资计算器",
-    subtitle: "你的专业房产计算器",
-    language: "语言",
-    en: "EN",
-    zh: "中文",
-
-    purpose: "用途",
-    purpose_invest: "投资",
-    purpose_owner: "自住",
-
-    country: "国家",
-    UK: "英国",
-    Dubai: "迪拜（阿联酋）",
-    Thailand: "泰国",
-    Japan: "日本",
-
-    property_price: "房产价格",
-    buyer_residency: "买家身份",
-    uk_resident: "英国本地买家",
-    overseas_buyer: "海外买家",
-    property_count: "首套/二套",
-    first_home: "首套",
-    additional_home: "二套/加购",
-
-    monthly_rent: "月租金",
-    agent_fee_pct: "租房中介费（%）",
-    mortgage_pct: "贷款比例（%）",
-    interest_rate_pct: "年利率（%）",
-
-    annual_holding: "年度持有成本",
-    service_charge: "物业费/管理费",
-    other_oneoff: "其他一次性费用",
-
-    optional: "（可选）",
-    self_input: "（用户自填）",
-    calculate: "计算",
-
-    // Investment results
-    est_roi: "现金回报率（预估）",
-    roi_formula: "年度净租金 ÷（首付 + 前期成本）",
-    net_yield: "净收益率（按房价）",
-    net_annual_rent: "年度净租金",
-    upfront_costs: "前期成本",
-
-    gross_annual_rent: "年度毛租金",
-    letting_agent_fee_annual: "年度中介费",
-    annual_holding_costs: "年度持有成本",
-    loan_amount: "贷款金额",
-    cash_deposit: "首付（自有资金）",
-    annual_interest_cost: "年度利息成本",
-
-    upfront_breakdown: "前期成本明细",
-    estimate: "预估",
-    purchase_tax: "购置税费",
-    gov_admin_est: "政府/律师/行政费用（预估）",
-    other_oneoff_costs: "其他一次性费用",
-    total_upfront_costs: "前期成本合计",
-
-    annual_cashflow: "年度现金流",
-    gross_vs_net: "毛 vs 净",
-    breakdown: "构成",
-
-    disclaimer: "免责声明：本结果为估算，仅供参考；税费可能因买家身份及当地法规而不同。",
-    note_est: "注：政府/律师/行政费用为MVP预估值，可能因城市、交易类型及当地规定而不同。",
-
-    // Owner results
-    owner_title: "年度固定支出（预估）",
-    owner_sub: "适用于自住场景（不含租金收益）",
-    per_month: "折合每月",
-    owner_total: "年度固定支出合计",
-    owner_council_tax: "市政税/地方税（预估）",
-    owner_utilities: "水电煤网费（预估）",
-    owner_property_tax: "房产税/地税（预估）",
-    owner_service_charge: "物业费/管理费（用户自填）",
-    owner_breakdown: "年度支出明细",
-
-    country_label: "国家",
-    currency_label: "币种",
-
-    // CTA
-    pro_report: "生成专业版报告（PDF）",
-    pro_hint: "下一步：连接 Zapier，一键生成 PDF 并发送到邮箱。",
-    email_prompt: "请输入邮箱以接收报告：",
-    sending_ok: "报告生成中，1-2分钟后请查收邮箱。",
-    sending_fail: "发送失败，请稍后重试。",
-    invalid_price: "请输入有效的房产价格。",
-  },
-};
-
-function tFactory(lang: Lang) {
-  return (key: string) => I18N[lang][key] ?? key;
+function fmtPct2(n: number) {
+  const v = Number.isFinite(n) ? n : 0;
+  return `${v.toFixed(2)}%`;
 }
 
-// ------------------- Models (MVP) -------------------
-function calcUKSDLT(price: number, isAdditional: boolean, isOverseas: boolean): number {
-  const bands = [
-    { upTo: 125000, rate: 0.0 },
-    { upTo: 250000, rate: 0.02 },
-    { upTo: 925000, rate: 0.05 },
-    { upTo: 1500000, rate: 0.10 },
-    { upTo: Infinity, rate: 0.12 },
-  ];
+/**
+ * ✅ UK SDLT rates per your screenshot:
+ * 0% up to 125k
+ * 2% 125k-250k
+ * 5% 250k-925k
+ * 10% 925k-1.5m
+ * 12% above 1.5m
+ * Additional home surcharge: +5% (MVP concept)
+ * Non-resident surcharge: +2% (MVP concept)
+ */
+function calcUKStampDuty(
+  price: number,
+  homeCount: HomeCount,
+  residency: Residency
+) {
+  const p = Math.max(0, Math.round(price || 0));
 
-  let remaining = price;
-  let last = 0;
-  let tax = 0;
+  const isAdditional = homeCount === "additional";
+  const isNonResident = residency === "nonResident";
 
-  for (const b of bands) {
-    const cap = b.upTo;
-    const bandSize = Math.max(0, Math.min(remaining, cap - last));
-    tax += bandSize * b.rate;
-    remaining -= bandSize;
-    last = cap;
-    if (remaining <= 0) break;
+  // UK surcharge concepts (MVP):
+  // - Additional property surcharge: +3%
+  // - Non-resident surcharge: +2%
+  const extra = (isAdditional ? 0.03 : 0) + (isNonResident ? 0.02 : 0);
+
+  const bandTax = (slice: number, rate: number) =>
+    slice > 0 ? slice * (rate + extra) : 0;
+
+  // === First-time buyer relief (treat "first" as first-time buyer for MVP) ===
+  // If price <= 500,000:
+  //   - 0% up to 300,000
+  //   - 5% on 300,000 to 500,000
+  // Otherwise: fall back to standard rates.
+  if (homeCount === "first" && p <= 500_000) {
+    const sliceAt5 = Math.max(0, Math.min(p, 500_000) - 300_000);
+    const tax = sliceAt5 * (0.05 + extra);
+    return Math.round(tax);
   }
 
-  if (isAdditional) tax += price * 0.03;
-  if (isOverseas) tax += price * 0.02;
+  // === Standard SDLT rates ===
+  // 0% up to 125,000
+  // 2% 125,001 - 250,000
+  // 5% 250,001 - 925,000
+  // 10% 925,001 - 1,500,000
+  // 12% above 1,500,000
+  const s2 = Math.max(0, Math.min(p, 250_000) - 125_000);
+  const s5 = Math.max(0, Math.min(p, 925_000) - 250_000);
+  const s10 = Math.max(0, Math.min(p, 1_500_000) - 925_000);
+  const s12 = Math.max(0, p - 1_500_000);
 
-  return Math.max(0, Math.round(tax));
-}
+  const tax =
+    bandTax(s2, 0.02) +
+    bandTax(s5, 0.05) +
+    bandTax(s10, 0.10) +
+    bandTax(s12, 0.12);
 
-function calcDubaiGovCosts(priceAED: number) {
-  const dld = priceAED * 0.04;
-  const trustee = 4000;
-  const admin = 580;
-  return { purchaseTax: Math.round(dld), otherGovFees: trustee + admin };
-}
-
-function calcThailandGovCosts(priceTHB: number) {
-  const transfer = priceTHB * 0.02;
-  return { purchaseTax: Math.round(transfer), otherGovFees: 0 };
-}
-
-function calcJapanGovCosts(priceJPY: number) {
-  const bundle = priceJPY * 0.03;
-  return { purchaseTax: Math.round(bundle), otherGovFees: 0 };
+  return Math.round(tax);
 }
 
-// Gov/Admin fee estimate (UK/TH/JP)
-function calcUKGovAdminFeesEstimate(priceGBP: number) {
-  let landRegistry = 0;
-  if (priceGBP <= 100000) landRegistry = 40;
-  else if (priceGBP <= 200000) landRegistry = 95;
-  else if (priceGBP <= 500000) landRegistry = 150;
-  else if (priceGBP <= 1000000) landRegistry = 295;
-  else landRegistry = 500;
-
-  const searchesAndAdmin = 1500;
-  return Math.round(landRegistry + searchesAndAdmin);
+// Other countries stamp duty MVP placeholders (keep simple and consistent)
+function estimateStampDutyUAE(price: number) {
+  return Math.round(Math.max(0, price * 0.04));
 }
-function calcThailandGovAdminFeesEstimate(priceTHB: number) {
-  return Math.round(priceTHB * 0.005);
+function estimateStampDutyTH(price: number) {
+  return Math.round(Math.max(0, price * 0.02));
 }
-function calcJapanGovAdminFeesEstimate(priceJPY: number) {
-  return Math.round(priceJPY * 0.007);
+function estimateStampDutyJP(price: number) {
+  return Math.round(Math.max(0, price * 0.01));
 }
 
-// Owner-occupied annual running cost estimates (MVP)
-function estimateUKCouncilTax(priceGBP: number) {
-  if (priceGBP <= 250000) return 1800;
-  if (priceGBP <= 500000) return 2200;
-  if (priceGBP <= 1000000) return 2800;
-  return 3500;
+// Government / solicitor / admin fee estimate (MVP)
+function estimateGovSolicitorFees(country: CountryCode, price: number) {
+  const p = Math.max(0, price || 0);
+  if (country === "uk") return Math.round(Math.max(1650, p * 0.004));
+  if (country === "uae") return Math.round(Math.max(4580, p * 0.0015));
+  if (country === "th") return Math.round(Math.max(25000, p * 0.002));
+  return Math.round(Math.max(120000, p * 0.0015)); // jp
 }
-function estimateUKUtilities() {
+
+// Self-use estimates (MVP, UK-focused)
+function estimateCouncilTaxUK(price: number) {
+  const p = Math.max(0, price || 0);
+  return Math.round(Math.min(3000, Math.max(1200, p * 0.005)));
+}
+function estimateUtilitiesUK() {
   return 2000;
 }
-function estimateDubaiUtilities(priceAED: number) {
-  return Math.round(Math.max(12000, priceAED * 0.004));
-}
-function estimateThailandUtilities(priceTHB: number) {
-  return Math.round(Math.max(30000, priceTHB * 0.004));
-}
-function estimateJapanUtilities(priceJPY: number) {
-  return Math.round(Math.max(180000, priceJPY * 0.002));
-}
-function estimateThailandPropertyTax(priceTHB: number) {
-  return Math.round(priceTHB * 0.001);
-}
-function estimateJapanPropertyTax(priceJPY: number) {
-  return Math.round(priceJPY * 0.007);
+
+function computeResult(inputs: Inputs): Result {
+  const country = inputs.country;
+  const currency = CURRENCY_BY_COUNTRY[country];
+
+  const price = parseNum(inputs.price);
+  const monthlyRent = parseNum(inputs.monthlyRent);
+  const agentFeePct = clampPct(parseNum(inputs.agentFeePct));
+  const mortgagePct = clampPct(parseNum(inputs.mortgagePct));
+  const aprPct = clampPct(parseNum(inputs.aprPct));
+  const annualHoldingCosts = parseNum(inputs.annualHoldingCosts);
+  const otherOneOffCosts = parseNum(inputs.otherOneOffCosts);
+
+  // One-off: stamp duty
+  let stampDuty = 0;
+  if (country === "uk") stampDuty = calcUKStampDuty(price, inputs.homeCount, inputs.residency);
+  if (country === "uae") stampDuty = estimateStampDutyUAE(price);
+  if (country === "th") stampDuty = estimateStampDutyTH(price);
+  if (country === "jp") stampDuty = estimateStampDutyJP(price);
+
+  const govSolicitorFeesEst = estimateGovSolicitorFees(country, price);
+  const upfrontCosts = Math.max(0, stampDuty + govSolicitorFeesEst + otherOneOffCosts);
+
+  // Finance (investment)
+  const loanAmount = Math.round((price * mortgagePct) / 100);
+  const cashDeposit = Math.max(0, Math.round(price - loanAmount));
+  const interestAnnual = Math.round((loanAmount * aprPct) / 100); // interest-only MVP
+
+  // Investment rents
+  const grossAnnualRent = Math.round(monthlyRent * 12);
+  const agentFeeAnnual = Math.round((grossAnnualRent * agentFeePct) / 100);
+  const holdingAnnual = Math.round(annualHoldingCosts);
+
+  const netAnnualRent = Math.round(grossAnnualRent - agentFeeAnnual - holdingAnnual - interestAnnual);
+
+  const netYieldPct = price > 0 ? (netAnnualRent / price) * 100 : 0;
+  const cashOnCashPct =
+    cashDeposit + upfrontCosts > 0 ? (netAnnualRent / (cashDeposit + upfrontCosts)) * 100 : 0;
+
+  // Self-use
+  const councilTaxEst = country === "uk" ? estimateCouncilTaxUK(price) : 0;
+  const utilitiesEst = country === "uk" ? estimateUtilitiesUK() : 0;
+  const propertyFeeSelf = Math.round(parseNum(inputs.annualPropertyFeeSelf));
+
+  const annualFixedOutgoings =
+    Math.round(councilTaxEst + utilitiesEst + annualHoldingCosts + propertyFeeSelf);
+
+  const monthlyFixedOutgoings = Math.round(annualFixedOutgoings / 12);
+
+  const firstYearTotalOutgoings = Math.round(annualFixedOutgoings + upfrontCosts);
+
+  // Sensitivity (investment): Rent [-10%, base, +10%] × APR [3,5,7]
+  const aprGrid = [3, 5, 7];
+  const rentFactors = [0.9, 1.0, 1.1];
+  const sensitivity: { apr: number; rentFactor: number; cocPct: number }[] = [];
+  for (const a of aprGrid) {
+    for (const rf of rentFactors) {
+      const ga = Math.round(grossAnnualRent * rf);
+      const af = Math.round((ga * agentFeePct) / 100);
+      const ia = Math.round((loanAmount * a) / 100);
+      const na = Math.round(ga - af - holdingAnnual - ia);
+      const coc = cashDeposit + upfrontCosts > 0 ? (na / (cashDeposit + upfrontCosts)) * 100 : 0;
+      sensitivity.push({ apr: a, rentFactor: rf, cocPct: coc });
+    }
+  }
+
+  return {
+    currency,
+
+    stampDuty,
+    govSolicitorFeesEst,
+    otherOneOffCosts: Math.round(otherOneOffCosts),
+    upfrontCosts,
+
+    loanAmount,
+    cashDeposit,
+    interestAnnual,
+
+    grossAnnualRent,
+    agentFeeAnnual,
+    holdingAnnual,
+    netAnnualRent,
+    netYieldPct,
+    cashOnCashPct,
+
+    councilTaxEst,
+    utilitiesEst,
+    propertyFeeSelf,
+    annualFixedOutgoings,
+    monthlyFixedOutgoings,
+    firstYearTotalOutgoings,
+
+    sensitivity,
+  };
 }
 
-// ------------------- Inputs -------------------
-function MoneyInput({
-  label,
+function GoldCard({
+  title,
   value,
-  onChange,
-  placeholder,
+  subtitle,
 }: {
-  label: string;
+  title: string;
   value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
+  subtitle?: string;
 }) {
   return (
-    <div>
-      <label className="block text-sm font-semibold mb-1">{label}</label>
-      <input
-        value={value}
-        onChange={(e) => {
-          const raw = e.target.value.replace(/[^\d,.\s]/g, "");
-          onChange(raw);
-        }}
-        onBlur={() => {
-          const n = parseNumber(value);
-          onChange(n ? formatThousands(n) : "");
-        }}
-        inputMode="decimal"
-        className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
-        placeholder={placeholder}
-      />
+    <div className="rounded-2xl border border-[#2b2b2b] bg-[#121212] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+      <div className="text-xs text-[#d7c28a]">{title}</div>
+      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
+      {subtitle ? <div className="mt-1 text-xs text-[#9a9a9a]">{subtitle}</div> : null}
     </div>
   );
 }
 
-// Percent sign moved into label: no trailing "%" element => alignment fixed
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[#242424] py-2 last:border-b-0">
+      <div className="text-sm text-[#cfcfcf]">{label}</div>
+      <div className="text-sm font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
 function PercentInput({
-  label,
   value,
   onChange,
   placeholder,
-  hint,
 }: {
-  label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  hint?: string;
 }) {
   return (
-    <div>
-      <label className="block text-sm font-semibold mb-1">{label}</label>
+    <div className="relative">
       <input
+        className="w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 pr-10 text-white outline-none"
         value={value}
-        onChange={(e) => {
-          const raw = e.target.value.replace(/[^\d.]/g, "");
-          onChange(raw);
-        }}
-        inputMode="decimal"
-        className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
+        onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))}
         placeholder={placeholder}
+        inputMode="decimal"
       />
-      {hint ? <div className="mt-1 text-xs text-gray-500">{hint}</div> : null}
+      <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-[#b6b6b6]">
+        %
+      </div>
     </div>
   );
 }
 
-export default function Home() {
-  const [lang, setLang] = useState<Lang>("en");
-  const t = useMemo(() => tFactory(lang), [lang]);
+function MoneyInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      className="w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+      value={value}
+      onChange={(e) => onChange(formatThousandsInput(e.target.value))}
+      placeholder={placeholder}
+      inputMode="numeric"
+    />
+  );
+}
 
-  const [purpose, setPurpose] = useState<Purpose>("investment");
-  const [country, setCountry] = useState<Country>("UK");
+export default function Page() {
+  const [inputs, setInputs] = useState<Inputs>({
+    lang: "zh",
+    purpose: "investment",
+    country: "uk",
 
-  const currency = useMemo(() => {
-    switch (country) {
-      case "UK":
-        return "GBP";
-      case "Dubai":
-        return "AED";
-      case "Thailand":
-        return "THB";
-      case "Japan":
-        return "JPY";
-      default:
-        return "USD";
-    }
-  }, [country]);
+    region: "",
+    project: "",
 
-  // input strings
-  const [priceStr, setPriceStr] = useState("");
-  const [rentMonthlyStr, setRentMonthlyStr] = useState("");
-  const [annualCostsStr, setAnnualCostsStr] = useState("");
-  const [otherOneOffCostsStr, setOtherOneOffCostsStr] = useState("");
+    homeCount: "first",
+    residency: "resident",
 
-  // percentages
-  const [mortgagePercentStr, setMortgagePercentStr] = useState("0");
-  const [mortgageRateStr, setMortgageRateStr] = useState("5");
-  const [agentFeePercentStr, setAgentFeePercentStr] = useState("10");
+    price: "420,000",
+    monthlyRent: "1,800",
+    agentFeePct: "10",
+    mortgagePct: "0",
+    aprPct: "5",
+    annualHoldingCosts: "2,500",
+    otherOneOffCosts: "",
 
-  // UK selectors
-  const [ukResidency, setUkResidency] = useState<UKBuyerResidency>("uk_resident");
-  const [ukPropertyCount, setUkPropertyCount] = useState<UKPropertyCount>("first_home");
+    annualPropertyFeeSelf: "2,500",
+  });
 
-  const [result, setResult] = useState<null | {
-    lang: Lang;
-    purpose: Purpose;
-    country: Country;
-    currency: string;
+  const ui = UI(inputs.lang);
+  const result = useMemo(() => computeResult(inputs), [inputs]);
 
-    // investment
-    purchaseTax: number;
-    otherGovFees: number;
-    otherOneOffCosts: number;
-    totalUpfrontCosts: number;
+  const isInvestment = inputs.purpose === "investment";
+  const currency = result.currency;
 
-    mortgagePercent: number;
-    mortgageRate: number;
-    loanAmount: number;
-    cashDeposit: number;
-    annualInterestCost: number;
+  // Pro report email send (client -> /api/pro-report)
+  const [email, setEmail] = useState("");
+  const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [sendError, setSendError] = useState<string>("");
 
-    grossAnnualRent: number;
-    lettingAgentAnnualFee: number;
-    annualHoldingCosts: number;
-    netAnnualRent: number;
+type CountryCode = "uk" | "uae" | "th" | "jp";
+type PurposeCode = "investment" | "owner";
+type LangCode = "en" | "zh";
 
-    netYieldOnPrice: number;
-    roiCashOnCash: number;
+function normalizeCountry(v: any): CountryCode {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (s === "uk" || s.includes("united kingdom") || s.includes("英国")) return "uk";
+  if (s === "uae" || s.includes("dubai") || s.includes("阿联酋") || s.includes("迪拜")) return "uae";
+  if (s === "th" || s.includes("thailand") || s.includes("泰国")) return "th";
+  if (s === "jp" || s.includes("japan") || s.includes("日本")) return "jp";
+  return "uk";
+}
 
-    // owner
-    annualCouncilOrMunicipalTax: number;
-    annualUtilities: number;
-    annualPropertyTax: number;
-    annualServiceCharge: number;
-    annualTotalRunningCosts: number;
-  }>(null);
+function normalizePurpose(v: any): PurposeCode {
+  const s = String(v ?? "").toLowerCase().trim();
+  if (s === "investment" || s.includes("投资")) return "investment";
+  if (s === "owner" || s.includes("自住")) return "owner";
+  return "investment";
+}
 
-  function onCalculate(e: React.FormEvent) {
-    e.preventDefault();
+function currencyByCountry(country: CountryCode) {
+  const map: Record<CountryCode, "GBP" | "AED" | "THB" | "JPY"> = {
+    uk: "GBP",
+    uae: "AED",
+    th: "THB",
+    jp: "JPY",
+  };
+  return map[country];
+}
 
-    const price = parseNumber(priceStr);
-    const rentMonthly = parseNumber(rentMonthlyStr);
-    const annualCosts = parseNumber(annualCostsStr);
-    const otherOneOff = parseNumber(otherOneOffCostsStr);
+async function onSendProReport() {
+  try {
+    setSendStatus("sending");
+    setSendError("");
 
-    const mortgagePercent = clamp(Number(mortgagePercentStr) || 0, 0, 100);
-    const mortgageRate = clamp(Number(mortgageRateStr) || 0, 0, 50);
-    const agentFeePercent = clamp(Number(agentFeePercentStr) || 0, 0, 100);
+    const country = normalizeCountry(inputs.country);
+    const purpose = normalizePurpose(inputs.purpose);
+    const lang: LangCode = inputs.lang === "en" ? "en" : "zh"; // 兜底
 
-    if (!price || price <= 0) {
-      alert(t("invalid_price"));
-      return;
-    }
+    // ⚠️ currency 一定要有值，避免 undefined
+    const currencySafe = currencyByCountry(country);
 
-    // OWNER MODE
-    if (purpose === "owner") {
-      let annualCouncilOrMunicipalTax = 0;
-      let annualUtilities = 0;
-      let annualPropertyTax = 0;
+    // 先把 inputs 数字都算出来（避免 price / monthlyRent 变 undefined）
+    const priceNum = parseNum(inputs.price);
+    const monthlyRentNum = parseNum(inputs.monthlyRent);
+    const agentFeePctNum = clampPct(parseNum(inputs.agentFeePct));
+    const mortgagePctNum = clampPct(parseNum(inputs.mortgagePct));
+    const aprPctNum = clampPct(parseNum(inputs.aprPct));
+    const annualHoldingCostsNum = parseNum(inputs.annualHoldingCosts);
+    const otherOneOffCostsNum = parseNum(inputs.otherOneOffCosts);
 
-      if (country === "UK") {
-        annualCouncilOrMunicipalTax = estimateUKCouncilTax(price);
-        annualUtilities = estimateUKUtilities();
-        annualPropertyTax = 250;
-      } else if (country === "Dubai") {
-        annualCouncilOrMunicipalTax = 0;
-        annualUtilities = estimateDubaiUtilities(price);
-        annualPropertyTax = 0;
-      } else if (country === "Thailand") {
-        annualCouncilOrMunicipalTax = 0;
-        annualUtilities = estimateThailandUtilities(price);
-        annualPropertyTax = estimateThailandPropertyTax(price);
-      } else if (country === "Japan") {
-        annualCouncilOrMunicipalTax = 0;
-        annualUtilities = estimateJapanUtilities(price);
-        annualPropertyTax = estimateJapanPropertyTax(price);
-      }
+    // ✅ results.breakdown 必须是 array（哪怕空）
+    const safeResults = {
+      ...(result || {}),
+      breakdown: Array.isArray((result as any)?.breakdown) ? (result as any).breakdown : [],
+    };
 
-      const annualServiceCharge = annualCosts; // self input
-      const annualTotalRunningCosts =
-        annualCouncilOrMunicipalTax + annualUtilities + annualPropertyTax + annualServiceCharge;
-
-      setResult({
-        lang,
-        purpose,
-        country,
-        currency,
-
-        purchaseTax: 0,
-        otherGovFees: 0,
-        otherOneOffCosts: 0,
-        totalUpfrontCosts: 0,
-
-        mortgagePercent: 0,
-        mortgageRate: 0,
-        loanAmount: 0,
-        cashDeposit: 0,
-        annualInterestCost: 0,
-
-        grossAnnualRent: 0,
-        lettingAgentAnnualFee: 0,
-        annualHoldingCosts: 0,
-        netAnnualRent: 0,
-
-        netYieldOnPrice: 0,
-        roiCashOnCash: 0,
-
-        annualCouncilOrMunicipalTax,
-        annualUtilities,
-        annualPropertyTax,
-        annualServiceCharge,
-        annualTotalRunningCosts,
-      });
-
-      return;
-    }
-
-    // INVESTMENT MODE
-    let purchaseTax = 0;
-    let otherGovFees = 0;
-
-    if (country === "UK") {
-      const isAdditional = ukPropertyCount === "additional_home";
-      const isOverseas = ukResidency === "overseas_buyer";
-      purchaseTax = calcUKSDLT(price, isAdditional, isOverseas);
-      otherGovFees = calcUKGovAdminFeesEstimate(price);
-    } else if (country === "Dubai") {
-      const d = calcDubaiGovCosts(price);
-      purchaseTax = d.purchaseTax;
-      otherGovFees = d.otherGovFees;
-    } else if (country === "Thailand") {
-      const g = calcThailandGovCosts(price);
-      purchaseTax = g.purchaseTax;
-      otherGovFees = calcThailandGovAdminFeesEstimate(price);
-    } else if (country === "Japan") {
-      const g = calcJapanGovCosts(price);
-      purchaseTax = g.purchaseTax;
-      otherGovFees = calcJapanGovAdminFeesEstimate(price);
-    }
-
-    const totalUpfrontCosts = purchaseTax + otherGovFees + otherOneOff;
-
-    const loanAmount = (price * mortgagePercent) / 100;
-    const cashDeposit = Math.max(0, price - loanAmount);
-    const annualInterestCost = (loanAmount * mortgageRate) / 100;
-
-    const grossAnnualRent = Math.max(0, rentMonthly) * 12;
-    const lettingAgentAnnualFee = grossAnnualRent * (agentFeePercent / 100);
-    const annualHoldingCosts = annualCosts;
-    const netAnnualRent = Math.max(
-      0,
-      grossAnnualRent - lettingAgentAnnualFee - annualHoldingCosts - annualInterestCost
-    );
-
-    const netYieldOnPrice = grossAnnualRent > 0 ? (netAnnualRent / price) * 100 : 0;
-    const totalCashIn = cashDeposit + totalUpfrontCosts;
-    const roiCashOnCash = grossAnnualRent > 0 ? (netAnnualRent / totalCashIn) * 100 : 0;
-
-    setResult({
+    // ✅ 顶层字段（后端 schema 要这些）
+    const payload = {
+      // --- 顶层（必须） ---
       lang,
       purpose,
       country,
-      currency,
+      currency: currencySafe,
 
-      purchaseTax,
-      otherGovFees,
-      otherOneOffCosts: otherOneOff,
-      totalUpfrontCosts,
+      price: priceNum,
+      monthlyRent: monthlyRentNum,
+      agentFeePct: agentFeePctNum,
+      mortgagePct: mortgagePctNum,
+      aprPct: aprPctNum,
+      annualHoldingCosts: annualHoldingCostsNum,
+      otherOneOffCosts: otherOneOffCostsNum,
 
-      mortgagePercent,
-      mortgageRate,
-      loanAmount,
-      cashDeposit,
-      annualInterestCost,
+      region: inputs.region || "",
+      project: inputs.project || "",
 
-      grossAnnualRent,
-      lettingAgentAnnualFee,
-      annualHoldingCosts,
-      netAnnualRent,
-
-      netYieldOnPrice,
-      roiCashOnCash,
-
-      annualCouncilOrMunicipalTax: 0,
-      annualUtilities: 0,
-      annualPropertyTax: 0,
-      annualServiceCharge: 0,
-      annualTotalRunningCosts: 0,
-    });
-  }
-
-  // ---------------- Charts ----------------
-  const upfrontChartData = useMemo(() => {
-    if (!result || result.purpose !== "investment") return null;
-    return {
-      labels: [t("purchase_tax"), t("gov_admin_est"), t("other_oneoff_costs")],
-      datasets: [
-        {
-          label: t("upfront_costs"),
-          data: [result.purchaseTax, result.otherGovFees, result.otherOneOffCosts],
-          backgroundColor: ["#D4AF37", "#F59E0B", "#7C3AED"], // gold / amber / royal purple
-          borderColor: "#FFFFFF",
-          borderWidth: 2,
-          hoverOffset: 8,
-        },
-      ],
-    };
-  }, [result, t]);
-
-  const cashflowChartData = useMemo(() => {
-    if (!result || result.purpose !== "investment") return null;
-    return {
-      labels: ["Annual"],
-      datasets: [
-        { label: t("gross_annual_rent"), data: [result.grossAnnualRent], backgroundColor: "#111827" },
-        { label: t("net_annual_rent"), data: [result.netAnnualRent], backgroundColor: "#16A34A" },
-        { label: t("letting_agent_fee_annual"), data: [result.lettingAgentAnnualFee], backgroundColor: "#F59E0B" },
-        { label: t("annual_holding_costs"), data: [result.annualHoldingCosts], backgroundColor: "#6366F1" },
-        { label: t("annual_interest_cost"), data: [result.annualInterestCost], backgroundColor: "#EF4444" },
-      ],
-    };
-  }, [result, t]);
-
-  const ownerChartData = useMemo(() => {
-    if (!result || result.purpose !== "owner") return null;
-    return {
-      labels: [t("owner_council_tax"), t("owner_utilities"), t("owner_property_tax"), t("owner_service_charge")],
-      datasets: [
-        {
-          label: t("owner_breakdown"),
-          data: [
-            result.annualCouncilOrMunicipalTax,
-            result.annualUtilities,
-            result.annualPropertyTax,
-            result.annualServiceCharge,
-          ],
-          backgroundColor: ["#D4AF37", "#F59E0B", "#EF4444", "#10B981"], // gold-led palette
-          borderColor: "#FFFFFF",
-          borderWidth: 2,
-          hoverOffset: 8,
-        },
-      ],
-    };
-  }, [result, t]);
-
-  const doughnutOptions = useMemo(
-    () => ({
-      responsive: true,
-      plugins: { legend: { position: "bottom" as const }, title: { display: false } },
-      cutout: "68%",
-    }),
-    []
-  );
-
-  const barOptions = useMemo(() => {
-    return {
-      responsive: true,
-      elements: { bar: { borderRadius: 10, borderSkipped: false } },
-      plugins: {
-        legend: { position: "bottom" as const },
-        title: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx: any) => {
-              const v = ctx.raw ?? 0;
-              const ccy = result?.currency || "USD";
-              return `${ctx.dataset.label}: ${formatMoney(Number(v), ccy)}`;
-            },
-          },
-        },
+      // UK 额外参数
+      uk: {
+        homeCount: inputs.homeCount,
+        residency: inputs.residency,
       },
-      scales: {
-        y: {
-          ticks: {
-            callback: function (value: any) {
-              const n = Number(value);
-              return Number.isFinite(n) ? formatThousands(n) : value;
-            },
-          },
-        },
+
+      // 自住额外参数
+      selfuse: {
+        annualPropertyFee: parseNum(inputs.annualPropertyFeeSelf),
       },
-    };
-  }, [result]);
 
-  // ---------------- Zapier placeholder ----------------
-  async function sendToZapier() {
-    if (!result) return;
-    const email = prompt(t("email_prompt"));
-    if (!email) return;
-
-    const zapierURL = "https://hooks.zapier.com/hooks/catch/XXXXX/XXXXX"; // replace
-
-    const payload = {
+      results: safeResults,
       email,
-      lang: result.lang,
-      purpose: result.purpose,
-      country: result.country,
-      currency: result.currency,
-      result,
+
+      // --- 你原来的 meta/inputs 结构（保留，方便 PDF 排版用） ---
+      meta: {
+        lang,
+        purpose,
+        country,
+        countryLabel: COUNTRY_NAME[lang][country],
+        currency: currencySafe,
+        region: inputs.region || "",
+        project: inputs.project || "",
+        createdAtISO: new Date().toISOString(),
+        website: "mygpc.co",
+      },
       inputs: {
-        price: parseNumber(priceStr),
-        rentMonthly: parseNumber(rentMonthlyStr),
-        annualCosts: parseNumber(annualCostsStr),
-        otherOneOffCosts: parseNumber(otherOneOffCostsStr),
-        mortgagePercent: Number(mortgagePercentStr) || 0,
-        mortgageRate: Number(mortgageRateStr) || 0,
-        agentFeePercent: Number(agentFeePercentStr) || 0,
-        ukResidency,
-        ukPropertyCount,
+        price: priceNum,
+        monthlyRent: monthlyRentNum,
+        agentFeePct: agentFeePctNum,
+        mortgagePct: mortgagePctNum,
+        aprPct: aprPctNum,
+        annualHoldingCosts: annualHoldingCostsNum,
+        otherOneOffCosts: otherOneOffCostsNum,
+        uk: {
+          homeCount: inputs.homeCount,
+          residency: inputs.residency,
+        },
+        selfuse: {
+          annualPropertyFee: parseNum(inputs.annualPropertyFeeSelf),
+        },
       },
     };
 
-    const r = await fetch(zapierURL, {
+    const res = await fetch("/api/pro-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    alert(r.ok ? t("sending_ok") : t("sending_fail"));
-  }
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `HTTP ${res.status}`);
+    }
 
-  // ---------------- Luxury Gold Hero styles ----------------
-  const goldHeroStyle: React.CSSProperties = {
-    background: "linear-gradient(145deg, #B9973E 0%, #F1E3B8 40%, #D3AF37 100%)",
-  };
-  const goldTitle = { color: "#2B230B" };
-  const goldSub = { color: "#6E5A23" };
-  const goldPill: React.CSSProperties = { background: "rgba(255,255,255,0.45)" };
+    setSendStatus("sent");
+  } catch (e: any) {
+    setSendStatus("error");
+    setSendError(e?.message || String(e));
+  }
+}
 
   return (
-    <main className="min-h-screen p-6 flex flex-col items-center bg-white text-black">
-      <div className="w-full max-w-3xl">
+    <div className="min-h-screen bg-[#0b0b0b] text-white">
+      <div className="mx-auto max-w-6xl px-4 py-10">
         {/* Header */}
-        <header className="mb-6">
-          <div className="flex items-center justify-between gap-3">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">{t("title")}</h1>
-
-            {/* Language switch: NO bilingual labels, only EN or 中文 */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 hidden sm:inline">{t("language")}</span>
-              <div className="flex rounded-xl border overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setLang("en")}
-                  className={`px-3 py-2 text-sm font-bold ${lang === "en" ? "bg-black text-white" : "bg-white"}`}
-                >
-                  {I18N.en.en}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLang("zh")}
-                  className={`px-3 py-2 text-sm font-bold ${lang === "zh" ? "bg-black text-white" : "bg-white"}`}
-                >
-                  {I18N.zh.zh}
-                </button>
-              </div>
-            </div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-sm text-[#d7c28a]">{ui.brand}</div>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{ui.title}</h1>
+            <p className="mt-2 text-sm text-[#b6b6b6]">{ui.subtitle}</p>
           </div>
 
-          <p className="text-gray-600 mt-1">{t("subtitle")}</p>
-        </header>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-[#b6b6b6]">{ui.language}</div>
+            <div className="inline-flex rounded-xl border border-[#2b2b2b] bg-[#101010] p-1">
+              <button
+                type="button"
+                onClick={() => setInputs((s) => ({ ...s, lang: "en" }))}
+                className={`rounded-lg px-3 py-1 text-sm ${
+                  inputs.lang === "en" ? "bg-[#d7c28a] text-black" : "text-[#cfcfcf]"
+                }`}
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputs((s) => ({ ...s, lang: "zh" }))}
+                className={`rounded-lg px-3 py-1 text-sm ${
+                  inputs.lang === "zh" ? "bg-[#d7c28a] text-black" : "text-[#cfcfcf]"
+                }`}
+              >
+                中文
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Form */}
-        <form onSubmit={onCalculate} className="rounded-2xl border p-5 shadow-sm bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Purpose FIRST */}
+        <div className="mt-8 rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.45)]">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* Purpose */}
             <div>
-              <label className="block text-sm font-semibold mb-1">{t("purpose")}</label>
+              <label className="text-sm text-[#d7c28a]">{ui.purpose}</label>
               <select
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value as Purpose)}
-                className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.purpose}
+                onChange={(e) => setInputs((s) => ({ ...s, purpose: e.target.value as Purpose }))}
               >
-                <option value="investment">{t("purpose_invest")}</option>
-                <option value="owner">{t("purpose_owner")}</option>
+                <option value="investment">{ui.purposeInvestment}</option>
+                <option value="selfuse">{ui.purposeSelfuse}</option>
               </select>
             </div>
 
             {/* Country */}
             <div>
-              <label className="block text-sm font-semibold mb-1">{t("country")}</label>
+              <label className="text-sm text-[#d7c28a]">{ui.country}</label>
               <select
-                value={country}
-                onChange={(e) => setCountry(e.target.value as Country)}
-                className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.country}
+                onChange={(e) => setInputs((s) => ({ ...s, country: e.target.value as CountryCode }))}
               >
-                <option value="UK">{t("UK")}</option>
-                <option value="Dubai">{t("Dubai")}</option>
-                <option value="Thailand">{t("Thailand")}</option>
-                <option value="Japan">{t("Japan")}</option>
+                <option value="uk">{COUNTRY_NAME[inputs.lang].uk}</option>
+                <option value="uae">{COUNTRY_NAME[inputs.lang].uae}</option>
+                <option value="th">{COUNTRY_NAME[inputs.lang].th}</option>
+                <option value="jp">{COUNTRY_NAME[inputs.lang].jp}</option>
               </select>
             </div>
 
-            <MoneyInput
-              label={`${t("property_price")} (${currency})`}
-              value={priceStr}
-              onChange={setPriceStr}
-              placeholder={
-                country === "UK"
-                  ? "e.g. 750,000"
-                  : country === "Dubai"
-                  ? "e.g. 2,000,000"
-                  : country === "Thailand"
-                  ? "e.g. 8,000,000"
-                  : "e.g. 90,000,000"
-              }
-            />
-
-            {/* UK options */}
-            {country === "UK" && (
-              <>
-                <div>
-                  <label className="block text-sm font-semibold mb-1">{t("buyer_residency")}</label>
-                  <select
-                    value={ukResidency}
-                    onChange={(e) => setUkResidency(e.target.value as UKBuyerResidency)}
-                    className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
-                  >
-                    <option value="uk_resident">{t("uk_resident")}</option>
-                    <option value="overseas_buyer">{t("overseas_buyer")}</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-1">{t("property_count")}</label>
-                  <select
-                    value={ukPropertyCount}
-                    onChange={(e) => setUkPropertyCount(e.target.value as UKPropertyCount)}
-                    className="w-full border rounded-xl px-3 py-2 bg-white text-black focus:outline-none focus:ring-2 focus:ring-black/10"
-                  >
-                    <option value="first_home">{t("first_home")}</option>
-                    <option value="additional_home">{t("additional_home")}</option>
-                  </select>
-                </div>
-              </>
-            )}
-
-            {/* Investment-only inputs */}
-            {purpose === "investment" && (
-              <>
-                <MoneyInput
-                  label={`${t("monthly_rent")} (${currency})`}
-                  value={rentMonthlyStr}
-                  onChange={setRentMonthlyStr}
-                  placeholder={country === "UK" ? "e.g. 2,800" : "e.g. 12,000"}
-                />
-
-                <PercentInput
-                  label={t("agent_fee_pct")}
-                  value={agentFeePercentStr}
-                  onChange={setAgentFeePercentStr}
-                  placeholder="e.g. 10"
-                  hint={lang === "zh" ? "按年度租金计算（MVP）。" : "Applied to annual rent (MVP)."}
-                />
-
-                <PercentInput
-                  label={t("mortgage_pct")}
-                  value={mortgagePercentStr}
-                  onChange={setMortgagePercentStr}
-                  placeholder="e.g. 70"
-                  hint={lang === "zh" ? "0 表示全款。" : "0 means cash purchase."}
-                />
-
-                <PercentInput
-                  label={t("interest_rate_pct")}
-                  value={mortgageRateStr}
-                  onChange={setMortgageRateStr}
-                  placeholder="e.g. 5"
-                  hint={lang === "zh" ? "MVP 按“只算利息”估算。" : "MVP assumes interest-only annual cost."}
-                />
-              </>
-            )}
-
-            {/* Annual cost field: investment vs owner */}
-            <MoneyInput
-              label={
-                purpose === "investment"
-                  ? `${t("annual_holding")} ${t("optional")} (${currency})`
-                  : `${t("service_charge")} ${t("self_input")} (${currency})`
-              }
-              value={annualCostsStr}
-              onChange={setAnnualCostsStr}
-              placeholder={lang === "zh" ? "例如：物业费，会计费" : "e.g. Service Charge, Accountant Fee"}
-            />
-
-            {/* Other one-off: investment only */}
-            {purpose === "investment" && (
-              <MoneyInput
-                label={`${t("other_oneoff")} ${t("optional")} (${currency})`}
-                value={otherOneOffCostsStr}
-                onChange={setOtherOneOffCostsStr}
-                placeholder={lang === "zh" ? "例如：律师费 + 家具包" : "e.g. lawyer + furniture pack"}
+            {/* Region */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">{ui.region}</label>
+              <input
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.region}
+                onChange={(e) => setInputs((s) => ({ ...s, region: e.target.value }))}
+                placeholder={inputs.lang === "en" ? "e.g. London / Dubai Marina" : "例如：伦敦 / 迪拜码头"}
               />
-            )}
+            </div>
+
+            {/* Project */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">{ui.project}</label>
+              <input
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.project}
+                onChange={(e) => setInputs((s) => ({ ...s, project: e.target.value }))}
+                placeholder={inputs.lang === "en" ? "e.g. London Dock" : "例如：London Dock"}
+              />
+            </div>
+
+            {/* Price */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.price} ({currency})
+              </label>
+              <div className="mt-2">
+                <MoneyInput
+                  value={inputs.price}
+                  onChange={(v) => setInputs((s) => ({ ...s, price: v }))}
+                  placeholder="e.g. 420,000"
+                />
+              </div>
+            </div>
+
+            {/* UK residency */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">{ui.residency}</label>
+              <select
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.residency}
+                onChange={(e) => setInputs((s) => ({ ...s, residency: e.target.value as Residency }))}
+              >
+                <option value="resident">{ui.resident}</option>
+                <option value="nonResident">{ui.nonResident}</option>
+              </select>
+            </div>
+
+            {/* UK homeCount */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">{ui.homeCount}</label>
+              <select
+                className="mt-2 w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+                value={inputs.homeCount}
+                onChange={(e) => setInputs((s) => ({ ...s, homeCount: e.target.value as HomeCount }))}
+              >
+                <option value="first">{ui.first}</option>
+                <option value="additional">{ui.additional}</option>
+              </select>
+            </div>
+
+            {/* Monthly rent */}
+            <div className={isInvestment ? "" : "opacity-50"}>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.monthlyRent} ({currency})
+              </label>
+              <div className="mt-2">
+                <MoneyInput
+                  value={inputs.monthlyRent}
+                  onChange={(v) => setInputs((s) => ({ ...s, monthlyRent: v }))}
+                  placeholder="e.g. 1,800"
+                />
+              </div>
+            </div>
+
+            {/* Agent fee % */}
+            <div className={isInvestment ? "" : "opacity-50"}>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.agentFeePct} (%)
+              </label>
+              <div className="mt-2">
+                <PercentInput
+                  value={inputs.agentFeePct}
+                  onChange={(v) => setInputs((s) => ({ ...s, agentFeePct: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Mortgage % */}
+            <div className={isInvestment ? "" : "opacity-50"}>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.mortgagePct} (%)
+              </label>
+              <div className="mt-2">
+                <PercentInput
+                  value={inputs.mortgagePct}
+                  onChange={(v) => setInputs((s) => ({ ...s, mortgagePct: v }))}
+                />
+              </div>
+            </div>
+
+            {/* APR % */}
+            <div className={isInvestment ? "" : "opacity-50"}>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.aprPct} (%)
+              </label>
+              <div className="mt-2">
+                <PercentInput
+                  value={inputs.aprPct}
+                  onChange={(v) => setInputs((s) => ({ ...s, aprPct: v }))}
+                />
+              </div>
+            </div>
+
+            {/* Annual holding */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.annualHoldingCosts} ({currency})
+              </label>
+              <div className="mt-2">
+                <MoneyInput
+                  value={inputs.annualHoldingCosts}
+                  onChange={(v) => setInputs((s) => ({ ...s, annualHoldingCosts: v }))}
+                  placeholder="e.g. 2,500"
+                />
+              </div>
+            </div>
+
+            {/* Other one-off */}
+            <div>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.otherOneOffCosts} ({currency})
+              </label>
+              <div className="mt-2">
+                <MoneyInput
+                  value={inputs.otherOneOffCosts}
+                  onChange={(v) => setInputs((s) => ({ ...s, otherOneOffCosts: v }))}
+                  placeholder={ui.otherPlaceholder}
+                />
+              </div>
+            </div>
+
+            {/* Self-use property fee */}
+            <div className={inputs.purpose === "selfuse" ? "" : "opacity-50"}>
+              <label className="text-sm text-[#d7c28a]">
+                {ui.propertyFeeSelf} ({currency})
+              </label>
+              <div className="mt-2">
+                <MoneyInput
+                  value={inputs.annualPropertyFeeSelf}
+                  onChange={(v) => setInputs((s) => ({ ...s, annualPropertyFeeSelf: v }))}
+                  placeholder="e.g. 2,500"
+                />
+              </div>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            className="mt-5 w-full rounded-2xl bg-black text-white py-3 font-extrabold shadow-md active:scale-[0.99]"
-          >
-            {t("calculate")}
-          </button>
-        </form>
+          <div className="mt-6">
+            <button
+              type="button"
+              className="w-full rounded-2xl bg-[#d7c28a] px-6 py-4 text-base font-semibold text-black shadow-[0_15px_40px_rgba(215,194,138,0.25)]"
+              onClick={() => window.scrollTo({ top: 999999, behavior: "smooth" })}
+            >
+              {ui.calc}
+            </button>
+          </div>
+        </div>
 
-        {/* ---------------- Investment Results ---------------- */}
-        {result && result.purpose === "investment" && (
-          <section className="mt-8">
-            {/* GOLD HERO */}
-            <div className="rounded-3xl p-6 md:p-7 shadow-xl" style={goldHeroStyle}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs uppercase tracking-widest" style={goldSub}>
-                    {t("est_roi")}
-                  </div>
-                  <div className="mt-2 text-5xl md:text-6xl font-extrabold leading-none" style={goldTitle}>
-                    {result.roiCashOnCash.toFixed(2)}%
-                  </div>
-                  <div className="mt-2 text-sm" style={goldSub}>
-                    {t("roi_formula")}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-xs" style={goldSub}>
-                    {t("country_label")}
-                  </div>
-                  <div className="text-sm font-bold" style={goldTitle}>
-                    {t(result.country)}
-                  </div>
-                  <div className="mt-2 text-xs" style={goldSub}>
-                    {t("currency_label")}
-                  </div>
-                  <div className="text-sm font-bold" style={goldTitle}>
-                    {result.currency}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-3">
-                <div className="rounded-2xl p-3" style={goldPill}>
-                  <div className="text-[11px]" style={goldSub}>
-                    {t("net_yield")}
-                  </div>
-                  <div className="text-lg font-extrabold" style={goldTitle}>
-                    {result.netYieldOnPrice.toFixed(2)}%
-                  </div>
-                </div>
-                <div className="rounded-2xl p-3" style={goldPill}>
-                  <div className="text-[11px]" style={goldSub}>
-                    {t("net_annual_rent")}
-                  </div>
-                  <div className="text-lg font-extrabold" style={goldTitle}>
-                    {formatMoney(result.netAnnualRent, result.currency)}
-                  </div>
-                </div>
-                <div className="rounded-2xl p-3" style={goldPill}>
-                  <div className="text-[11px]" style={goldSub}>
-                    {t("upfront_costs")}
-                  </div>
-                  <div className="text-lg font-extrabold" style={goldTitle}>
-                    {formatMoney(result.totalUpfrontCosts, result.currency)}
-                  </div>
-                </div>
-              </div>
+        {/* Results */}
+        <div className="mt-10 rounded-3xl border border-[#2b2b2b] bg-gradient-to-b from-[#141414] to-[#0b0b0b] p-6 shadow-[0_25px_70px_rgba(0,0,0,0.55)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="text-xs text-[#d7c28a]">
+              {ui.countryLabel}: {COUNTRY_NAME[inputs.lang][inputs.country]} · {ui.currencyLabel}: {currency}
+              {inputs.region ? ` · ${ui.region.replace("（可选）", "").replace("(optional)", "").trim()}: ${inputs.region}` : ""}
+              {inputs.project ? ` · ${ui.project.replace("（可选）", "").replace("(optional)", "").trim()}: ${inputs.project}` : ""}
             </div>
-
-            {/* KPI cards */}
-            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                { k: t("gross_annual_rent"), v: formatMoney(result.grossAnnualRent, result.currency) },
-                { k: t("letting_agent_fee_annual"), v: formatMoney(result.lettingAgentAnnualFee, result.currency) },
-                { k: t("annual_holding_costs"), v: formatMoney(result.annualHoldingCosts, result.currency) },
-                { k: t("loan_amount"), v: formatMoney(result.loanAmount, result.currency) },
-                { k: t("cash_deposit"), v: formatMoney(result.cashDeposit, result.currency) },
-                { k: t("annual_interest_cost"), v: formatMoney(result.annualInterestCost, result.currency) },
-              ].map((x) => (
-                <div key={x.k} className="rounded-2xl border bg-white p-4 shadow-sm">
-                  <div className="text-xs text-gray-500">{x.k}</div>
-                  <div className="mt-1 text-xl font-extrabold">{x.v}</div>
-                </div>
-              ))}
+            <div className="rounded-2xl border border-[#2b2b2b] bg-[#0f0f0f] px-4 py-2 text-xs text-[#b6b6b6]">
+              {ui.estimateTag}
             </div>
+          </div>
 
-            {/* Charts */}
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-3xl border bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-base font-extrabold">{t("upfront_costs")}</div>
-                  <div className="text-xs text-gray-500">{t("breakdown")}</div>
+          {isInvestment ? (
+            <>
+              {/* Investment headline */}
+              <div className="mt-6 rounded-3xl border border-[#2b2b2b] bg-[#101010] p-6">
+                <div className="text-xs text-[#d7c28a]">{ui.invTitle}</div>
+                <div className="mt-2 text-5xl font-semibold tracking-tight text-white">
+                  {fmtPct2(result.cashOnCashPct)}
                 </div>
-                <div className="mt-4">{upfrontChartData ? <Doughnut data={upfrontChartData} options={doughnutOptions} /> : null}</div>
-                <div className="mt-3 text-xs text-gray-500">
-                  {t("total_upfront_costs")}:{" "}
-                  <span className="font-bold">{formatMoney(result.totalUpfrontCosts, result.currency)}</span>
+
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <GoldCard title={ui.netYield} value={fmtPct2(result.netYieldPct)} />
+                  <GoldCard title={ui.netAnnualRent} value={`${currency} ${fmtMoney(result.netAnnualRent)}`} />
+                  <GoldCard title={ui.upfrontCosts} value={`${currency} ${fmtMoney(result.upfrontCosts)}`} />
                 </div>
               </div>
 
-              <div className="rounded-3xl border bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="text-base font-extrabold">{t("annual_cashflow")}</div>
-                  <div className="text-xs text-gray-500">{t("gross_vs_net")}</div>
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <GoldCard title={ui.grossAnnualRent} value={`${currency} ${fmtMoney(result.grossAnnualRent)}`} />
+                <GoldCard title={ui.agentFeeAnnual} value={`${currency} ${fmtMoney(result.agentFeeAnnual)}`} />
+                <GoldCard title={ui.holdingAnnual} value={`${currency} ${fmtMoney(result.holdingAnnual)}`} />
+                <GoldCard title={ui.loanAmount} value={`${currency} ${fmtMoney(result.loanAmount)}`} />
+                <GoldCard title={ui.cashDeposit} value={`${currency} ${fmtMoney(result.cashDeposit)}`} />
+                <GoldCard title={ui.interestAnnual} value={`${currency} ${fmtMoney(result.interestAnnual)}`} />
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6">
+                  <div className="text-sm font-semibold text-white">{ui.breakdown}</div>
+                  <div className="mt-4">
+                    <Row label={ui.stampDuty} value={`${currency} ${fmtMoney(result.stampDuty)}`} />
+                    <Row label={ui.govFees} value={`${currency} ${fmtMoney(result.govSolicitorFeesEst)}`} />
+                    <Row label={ui.otherOneOffCosts} value={`${currency} ${fmtMoney(result.otherOneOffCosts)}`} />
+                    <Row label={ui.upfrontCosts} value={`${currency} ${fmtMoney(result.upfrontCosts)}`} />
+                  </div>
+                  <div className="mt-4 text-xs text-[#7b7b7b]">{ui.noteGov}</div>
                 </div>
-                <div className="mt-4 h-[260px] flex items-center justify-center">
-                  {cashflowChartData ? <Bar data={cashflowChartData} options={barOptions} /> : null}
-                </div>
-                <div className="mt-3 text-xs text-gray-500">
-                  {t("net_annual_rent")}:{" "}
-                  <span className="font-bold">{formatMoney(result.netAnnualRent, result.currency)}</span>
+
+                <div className="rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6">
+                  <div className="text-sm font-semibold text-white">{ui.annualCashflow}</div>
+                  <div className="mt-4">
+                    <Row label={ui.grossAnnualRent} value={`${currency} ${fmtMoney(result.grossAnnualRent)}`} />
+                    <Row label={ui.agentFeeAnnual} value={`${currency} ${fmtMoney(result.agentFeeAnnual)}`} />
+                    <Row label={ui.holdingAnnual} value={`${currency} ${fmtMoney(result.holdingAnnual)}`} />
+                    <Row label={ui.interestAnnual} value={`${currency} ${fmtMoney(result.interestAnnual)}`} />
+                    <Row label={ui.netAnnualRent} value={`${currency} ${fmtMoney(result.netAnnualRent)}`} />
+                  </div>
                 </div>
               </div>
+
+              {/* Sensitivity */}
+              <div className="mt-6 rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="text-sm font-semibold text-white">{ui.sensitivity}</div>
+                  <div className="text-xs text-[#7b7b7b]">{ui.sensitivityHint}</div>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[520px] border-separate border-spacing-0">
+                    <thead>
+                      <tr>
+                        <th className="rounded-tl-xl border border-[#2b2b2b] bg-[#101010] px-3 py-2 text-left text-xs text-[#d7c28a]">
+                          APR \ Rent
+                        </th>
+                        <th className="border border-[#2b2b2b] bg-[#101010] px-3 py-2 text-center text-xs text-[#d7c28a]">
+                          -10%
+                        </th>
+                        <th className="border border-[#2b2b2b] bg-[#101010] px-3 py-2 text-center text-xs text-[#d7c28a]">
+                          Base
+                        </th>
+                        <th className="rounded-tr-xl border border-[#2b2b2b] bg-[#101010] px-3 py-2 text-center text-xs text-[#d7c28a]">
+                          +10%
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[3, 5, 7].map((apr) => (
+                        <tr key={apr}>
+                          <td className="border border-[#2b2b2b] bg-[#0b0b0b] px-3 py-3 text-left text-sm font-semibold text-white">
+                            {apr}%
+                          </td>
+                          {[0.9, 1.0, 1.1].map((rf) => {
+                            const item = result.sensitivity.find((x) => x.apr === apr && x.rentFactor === rf);
+                            const v = item?.cocPct ?? 0;
+                            return (
+                              <td
+                                key={`${apr}-${rf}`}
+                                className="border border-[#2b2b2b] px-3 py-3 text-center text-sm font-semibold text-white"
+                              >
+                                {fmtPct2(v)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 text-xs text-[#7b7b7b]">{ui.disclaimer}</div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Self-use headline */}
+              <div className="mt-6 rounded-3xl border border-[#2b2b2b] bg-[#101010] p-6">
+                <div className="text-xs text-[#d7c28a]">{ui.selfTitle}</div>
+
+                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <GoldCard
+                    title={ui.annualFixed}
+                    value={`${currency} ${fmtMoney(result.annualFixedOutgoings)}`}
+                    subtitle={ui.annualFixedHint}
+                  />
+                  <GoldCard title={ui.perMonth} value={`${currency} ${fmtMoney(result.monthlyFixedOutgoings)}`} />
+                  <GoldCard
+                    title={ui.firstYear}
+                    value={`${currency} ${fmtMoney(result.firstYearTotalOutgoings)}`}
+                    subtitle={`${ui.annualFixed} + ${ui.upfrontCosts}`}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6">
+                  <div className="text-sm font-semibold text-white">{ui.annualFixed}</div>
+                  <div className="mt-4">
+                    <Row label={ui.councilTax} value={`${currency} ${fmtMoney(result.councilTaxEst)}`} />
+                    <Row label={ui.utilities} value={`${currency} ${fmtMoney(result.utilitiesEst)}`} />
+                    <Row label={ui.holdingAnnual} value={`${currency} ${fmtMoney(result.holdingAnnual)}`} />
+                    <Row label={ui.propertyFeeSelf} value={`${currency} ${fmtMoney(result.propertyFeeSelf)}`} />
+                    <Row label={ui.annualFixed} value={`${currency} ${fmtMoney(result.annualFixedOutgoings)}`} />
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6">
+                  <div className="text-sm font-semibold text-white">{ui.upfrontCosts}</div>
+                  <div className="mt-4">
+                    <Row label={ui.stampDuty} value={`${currency} ${fmtMoney(result.stampDuty)}`} />
+                    <Row label={ui.govFees} value={`${currency} ${fmtMoney(result.govSolicitorFeesEst)}`} />
+                    <Row label={ui.otherOneOffCosts} value={`${currency} ${fmtMoney(result.otherOneOffCosts)}`} />
+                    <Row label={ui.upfrontCosts} value={`${currency} ${fmtMoney(result.upfrontCosts)}`} />
+                  </div>
+                  <div className="mt-4 text-xs text-[#7b7b7b]">{ui.noteGov}</div>
+                </div>
+              </div>
+
+              <div className="mt-6 text-xs text-[#7b7b7b]">{ui.disclaimer}</div>
+            </>
+          )}
+        </div>
+
+        {/* Pro Report */}
+        <div className="mt-8 rounded-3xl border border-[#2b2b2b] bg-[#0f0f0f] p-6 shadow-[0_20px_50px_rgba(0,0,0,0.45)]">
+          <div className="text-lg font-semibold text-white">{ui.proTitle}</div>
+          <div className="mt-1 text-sm text-[#b6b6b6]">{ui.proHint}</div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <input
+              className="w-full rounded-2xl border border-[#2b2b2b] bg-[#0b0b0b] px-4 py-3 text-white outline-none"
+              placeholder={inputs.lang === "en" ? "name@example.com" : "例如：name@example.com"}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              inputMode="email"
+            />
+
+            <button
+              type="button"
+              onClick={onSendProReport}
+              disabled={!email || sendStatus === "sending"}
+              className="rounded-2xl bg-[#d7c28a] px-6 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {sendStatus === "sending" ? ui.sending : ui.send}
+            </button>
+          </div>
+
+          {sendStatus === "sent" ? (
+            <div className="mt-3 text-sm text-[#d7c28a]">{ui.sent}</div>
+          ) : null}
+
+          {sendStatus === "error" ? (
+            <div className="mt-3 text-sm text-red-400">
+              {ui.failed} {sendError}
             </div>
+          ) : null}
 
-            {/* Breakdown */}
-            <div className="mt-5 rounded-3xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-base font-extrabold">{t("upfront_breakdown")}</div>
-                <div className="text-xs text-gray-500">{t("estimate")}</div>
-              </div>
+          <div className="mt-4 text-xs text-[#7b7b7b]">{ui.disclaimer}</div>
+        </div>
 
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t("purchase_tax")}</span>
-                  <span className="font-extrabold">{formatMoney(result.purchaseTax, result.currency)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t("gov_admin_est")}</span>
-                  <span className="font-extrabold">{formatMoney(result.otherGovFees, result.currency)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-600">{t("other_oneoff_costs")}</span>
-                  <span className="font-extrabold">{formatMoney(result.otherOneOffCosts, result.currency)}</span>
-                </div>
-                <div className="border-t pt-3 flex items-center justify-between">
-                  <span className="font-bold">{t("total_upfront_costs")}</span>
-                  <span className="text-lg font-extrabold">{formatMoney(result.totalUpfrontCosts, result.currency)}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 text-xs text-gray-500">{t("disclaimer")}</div>
-              <div className="mt-2 text-xs text-gray-500">{t("note_est")}</div>
-            </div>
-
-            {/* CTA */}
-            <div className="mt-5 rounded-3xl border bg-white p-5 shadow-sm">
-              <div className="text-base font-extrabold">{t("pro_report")}</div>
-              <div className="mt-1 text-sm text-gray-600">{t("pro_hint")}</div>
-              <button
-                type="button"
-                className="mt-4 w-full rounded-2xl text-white py-3 font-extrabold shadow-md active:scale-[0.99]"
-                style={{ background: "linear-gradient(135deg, #B38A22 0%, #D4AF37 50%, #8B6B14 100%)" }}
-                onClick={sendToZapier}
-              >
-                {t("pro_report")}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* ---------------- Owner Results ---------------- */}
-        {result && result.purpose === "owner" && (
-          <section className="mt-8">
-            {/* GOLD HERO */}
-            <div className="rounded-3xl p-6 md:p-7 shadow-xl" style={goldHeroStyle}>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-xs uppercase tracking-widest" style={goldSub}>
-                    {t("owner_title")}
-                  </div>
-                  <div className="mt-2 text-4xl md:text-5xl font-extrabold leading-none" style={goldTitle}>
-                    {formatMoney(result.annualTotalRunningCosts, result.currency)}
-                  </div>
-                  <div className="mt-2 text-sm" style={goldSub}>
-                    {t("owner_sub")}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-xs" style={goldSub}>
-                    {t("country_label")}
-                  </div>
-                  <div className="text-sm font-bold" style={goldTitle}>
-                    {t(result.country)}
-                  </div>
-                  <div className="mt-2 text-xs" style={goldSub}>
-                    {t("currency_label")}
-                  </div>
-                  <div className="text-sm font-bold" style={goldTitle}>
-                    {result.currency}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl p-3" style={goldPill}>
-                  <div className="text-[11px]" style={goldSub}>
-                    {t("owner_total")}
-                  </div>
-                  <div className="text-lg font-extrabold" style={goldTitle}>
-                    {formatMoney(result.annualTotalRunningCosts, result.currency)}
-                  </div>
-                </div>
-                <div className="rounded-2xl p-3" style={goldPill}>
-                  <div className="text-[11px]" style={goldSub}>
-                    {t("per_month")}
-                  </div>
-                  <div className="text-lg font-extrabold" style={goldTitle}>
-                    {formatMoney(result.annualTotalRunningCosts / 12, result.currency)}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Cards */}
-            <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { k: t("owner_council_tax"), v: formatMoney(result.annualCouncilOrMunicipalTax, result.currency) },
-                { k: t("owner_utilities"), v: formatMoney(result.annualUtilities, result.currency) },
-                { k: t("owner_property_tax"), v: formatMoney(result.annualPropertyTax, result.currency) },
-                { k: t("owner_service_charge"), v: formatMoney(result.annualServiceCharge, result.currency) },
-              ].map((x) => (
-                <div key={x.k} className="rounded-2xl border bg-white p-4 shadow-sm">
-                  <div className="text-xs text-gray-500">{x.k}</div>
-                  <div className="mt-1 text-xl font-extrabold">{x.v}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Chart + breakdown */}
-            <div className="mt-5 rounded-3xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="text-base font-extrabold">{t("owner_breakdown")}</div>
-                <div className="text-xs text-gray-500">{t("estimate")}</div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-2xl border bg-white p-4">
-                  {ownerChartData ? <Doughnut data={ownerChartData} options={doughnutOptions} /> : null}
-                </div>
-
-                <div className="rounded-2xl border bg-white p-4">
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">{t("owner_council_tax")}</span>
-                      <span className="font-extrabold">{formatMoney(result.annualCouncilOrMunicipalTax, result.currency)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">{t("owner_utilities")}</span>
-                      <span className="font-extrabold">{formatMoney(result.annualUtilities, result.currency)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">{t("owner_property_tax")}</span>
-                      <span className="font-extrabold">{formatMoney(result.annualPropertyTax, result.currency)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">{t("owner_service_charge")}</span>
-                      <span className="font-extrabold">{formatMoney(result.annualServiceCharge, result.currency)}</span>
-                    </div>
-                    <div className="border-t pt-3 flex items-center justify-between">
-                      <span className="font-bold">{t("owner_total")}</span>
-                      <span className="text-lg font-extrabold">{formatMoney(result.annualTotalRunningCosts, result.currency)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 text-xs text-gray-500">{t("disclaimer")}</div>
-
-              <button
-                type="button"
-                className="mt-4 w-full rounded-2xl text-white py-3 font-extrabold shadow-md active:scale-[0.99]"
-                style={{ background: "linear-gradient(135deg, #B38A22 0%, #D4AF37 50%, #8B6B14 100%)" }}
-                onClick={sendToZapier}
-              >
-                {t("pro_report")}
-              </button>
-            </div>
-          </section>
-        )}
+        <div className="mt-10 text-center text-xs text-[#7b7b7b]">{ui.disclaimer}</div>
       </div>
-    </main>
+    </div>
   );
 }
