@@ -204,7 +204,7 @@ const UI = (lang: Lang) => {
   const zh = {
     brand: "MyGPC",
     title: "全球房产投资计算器",
-    subtitle: "我的专业全球房产投资计算器.",
+    subtitle: "我的专业全球房产投资计算器...",
 
     language: "语言",
     purpose: "用途",
