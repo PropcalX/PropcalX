@@ -1,26 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import path from 'path';
 
-// 🔴 关键：单独定义组件类型，避免把组件值当类型用
-export type ProReportProps = {
-  data: {
-    lang: 'zh' | 'en';
-    purpose: 'investment' | 'self';
-    currency: string;
-    ui: Record<string, string>;
-    results: {
-      fmt: Record<string, string | number>;
-    };
-    meta: {
-      countryLabel: string;
-      createdAt: string;
-      website: string;
-    };
-    email?: string;
-  };
-};
-
-// 字体注册（已修复 unicodeRange 报错）
+// 字体注册
 const fontPath = path.join(process.cwd(), 'public/fonts/');
 
 Font.register({
@@ -30,15 +11,13 @@ Font.register({
       src: `${fontPath}NotoSansSC-Regular.ttf`,
       fontWeight: 'normal',
       fontStyle: 'normal',
-      unicodeRange: 'U+4E00-9FFF, U+3400-4DBF, U+F900-FAFF' as any,
     },
     {
       src: `${fontPath}NotoSans-Variable.ttf`,
       fontWeight: 'normal',
       fontStyle: 'normal',
-      unicodeRange: 'U+0000-007F' as any,
     },
-  ] as any,
+  ],
 });
 
 Font.register({
@@ -48,18 +27,16 @@ Font.register({
       src: `${fontPath}NotoSansSC-Regular.ttf`,
       fontWeight: 'bold',
       fontStyle: 'normal',
-      unicodeRange: 'U+4E00-9FFF, U+3400-4DBF, U+F900-FAFF' as any,
     },
     {
       src: `${fontPath}NotoSans-Variable.ttf`,
       fontWeight: 'bold',
       fontStyle: 'normal',
-      unicodeRange: 'U+0000-007F' as any,
     },
-  ] as any,
+  ],
 });
 
-// 样式定义
+// 样式
 const styles = StyleSheet.create({
   page: { padding: 40, backgroundColor: '#ffffff', fontFamily: 'MyGPCFont' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30, paddingBottom: 15, borderBottom: '1px solid #e0e0e0' },
@@ -83,8 +60,8 @@ const styles = StyleSheet.create({
   disclaimer: { fontSize: 8, color: '#7b7b7b', marginTop: 20, textAlign: 'center' },
 });
 
-// 🔴 关键：用 ProReportProps 约束组件，不把组件本身当类型
-const ProReportComponent = ({ data }: ProReportProps) => {
+// 组件（纯 JSX，无 TS 类型）
+const ProReport = ({ data }) => {
   const { lang, purpose, currency, ui, results, meta } = data;
   const isInvestment = purpose === 'investment';
   
@@ -216,5 +193,4 @@ const ProReportComponent = ({ data }: ProReportProps) => {
   );
 };
 
-// 🔴 关键：默认导出组件，名称统一为 ProReport
-export default ProReportComponent as typeof ProReportComponent;
+export default ProReport;
