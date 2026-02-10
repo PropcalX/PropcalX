@@ -1,6 +1,7 @@
 "use client";
 type CountryCode = "uk" | "uae" | "th" | "jp";
 type PurposeCode = "investment" | "owner";
+type LangCode = "en" | "zh";
 
 function normalizeCountry(v: any): CountryCode {
   const s = String(v ?? "").toLowerCase().trim();
@@ -15,8 +16,17 @@ function normalizePurpose(v: any): PurposeCode {
   const s = String(v ?? "").toLowerCase().trim();
   if (s === "investment" || s.includes("投资")) return "investment";
   if (s === "owner" || s.includes("自住")) return "owner";
-  // 默认按投资
   return "investment";
+}
+
+function currencyByCountry(country: CountryCode) {
+  const map: Record<CountryCode, "GBP" | "AED" | "THB" | "JPY"> = {
+    uk: "GBP",
+    uae: "AED",
+    th: "THB",
+    jp: "JPY",
+  };
+  return map[country];
 }
 
 function safeNumber(v: any): number {
@@ -109,7 +119,7 @@ const UI = (lang: Lang) => {
   const en = {
     brand: "MyGPC",
     title: "Global Property Calculator",
-    subtitle: "Screenshot-ready ROI + cost estimate (MVP).",
+    subtitle: "My professional Global Property Investment Calculator.",
 
     language: "Language",
     purpose: "Purpose",
@@ -194,7 +204,7 @@ const UI = (lang: Lang) => {
   const zh = {
     brand: "MyGPC",
     title: "全球房产投资计算器",
-    subtitle: "可截图宣传的 ROI + 成本预估（MVP）",
+    subtitle: "我的专业全球房产投资计算器.",
 
     language: "语言",
     purpose: "用途",
@@ -217,11 +227,11 @@ const UI = (lang: Lang) => {
     agentFeePct: "租房中介费",
     mortgagePct: "贷款比例",
     aprPct: "年利率",
-    annualHoldingCosts: "年度持有成本（可选）",
+    annualHoldingCosts: "物业费/地税",
     otherOneOffCosts: "其他一次性费用（可选）",
     otherPlaceholder: "例如：律师费、家具包等",
 
-    propertyFeeSelf: "物业费/管理费（自住自填）",
+    propertyFeeSelf: "年度其他持有成本(如会计费)",
 
     calc: "计算",
 
@@ -596,143 +606,105 @@ export default function Page() {
   const [sendStatus, setSendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [sendError, setSendError] = useState<string>("");
 
-type CountryCode = "uk" | "uae" | "th" | "jp";
-type PurposeCode = "investment" | "owner";
-type LangCode = "en" | "zh";
+  async function onSendProReport() {
+    try {
+      setSendStatus("sending");
+      setSendError("");
 
-function normalizeCountry(v: any): CountryCode {
-  const s = String(v ?? "").toLowerCase().trim();
-  if (s === "uk" || s.includes("united kingdom") || s.includes("英国")) return "uk";
-  if (s === "uae" || s.includes("dubai") || s.includes("阿联酋") || s.includes("迪拜")) return "uae";
-  if (s === "th" || s.includes("thailand") || s.includes("泰国")) return "th";
-  if (s === "jp" || s.includes("japan") || s.includes("日本")) return "jp";
-  return "uk";
-}
+      const country = normalizeCountry(inputs.country);
+      const purpose = normalizePurpose(inputs.purpose);
+      const lang: LangCode = inputs.lang === "en" ? "en" : "zh";
 
-function normalizePurpose(v: any): PurposeCode {
-  const s = String(v ?? "").toLowerCase().trim();
-  if (s === "investment" || s.includes("投资")) return "investment";
-  if (s === "owner" || s.includes("自住")) return "owner";
-  return "investment";
-}
+      // 兜底币种，避免undefined
+      const currencySafe = currencyByCountry(country);
 
-function currencyByCountry(country: CountryCode) {
-  const map: Record<CountryCode, "GBP" | "AED" | "THB" | "JPY"> = {
-    uk: "GBP",
-    uae: "AED",
-    th: "THB",
-    jp: "JPY",
-  };
-  return map[country];
-}
+      // 解析所有数字，避免字符串格式导致PDF渲染异常
+      const priceNum = parseNum(inputs.price);
+      const monthlyRentNum = parseNum(inputs.monthlyRent);
+      const agentFeePctNum = clampPct(parseNum(inputs.agentFeePct));
+      const mortgagePctNum = clampPct(parseNum(inputs.mortgagePct));
+      const aprPctNum = clampPct(parseNum(inputs.aprPct));
+      const annualHoldingCostsNum = parseNum(inputs.annualHoldingCosts);
+      const otherOneOffCostsNum = parseNum(inputs.otherOneOffCosts);
+      const annualPropertyFeeSelfNum = parseNum(inputs.annualPropertyFeeSelf);
 
-async function onSendProReport() {
-  try {
-    setSendStatus("sending");
-    setSendError("");
-
-    const country = normalizeCountry(inputs.country);
-    const purpose = normalizePurpose(inputs.purpose);
-    const lang: LangCode = inputs.lang === "en" ? "en" : "zh"; // 兜底
-
-    // ⚠️ currency 一定要有值，避免 undefined
-    const currencySafe = currencyByCountry(country);
-
-    // 先把 inputs 数字都算出来（避免 price / monthlyRent 变 undefined）
-    const priceNum = parseNum(inputs.price);
-    const monthlyRentNum = parseNum(inputs.monthlyRent);
-    const agentFeePctNum = clampPct(parseNum(inputs.agentFeePct));
-    const mortgagePctNum = clampPct(parseNum(inputs.mortgagePct));
-    const aprPctNum = clampPct(parseNum(inputs.aprPct));
-    const annualHoldingCostsNum = parseNum(inputs.annualHoldingCosts);
-    const otherOneOffCostsNum = parseNum(inputs.otherOneOffCosts);
-
-    // ✅ results.breakdown 必须是 array（哪怕空）
-    const safeResults = {
-      ...(result || {}),
-      breakdown: Array.isArray((result as any)?.breakdown) ? (result as any).breakdown : [],
-    };
-
-    // ✅ 顶层字段（后端 schema 要这些）
-    const payload = {
-      // --- 顶层（必须） ---
-      lang,
-      purpose,
-      country,
-      currency: currencySafe,
-
-      price: priceNum,
-      monthlyRent: monthlyRentNum,
-      agentFeePct: agentFeePctNum,
-      mortgagePct: mortgagePctNum,
-      aprPct: aprPctNum,
-      annualHoldingCosts: annualHoldingCostsNum,
-      otherOneOffCosts: otherOneOffCostsNum,
-
-      region: inputs.region || "",
-      project: inputs.project || "",
-
-      // UK 额外参数
-      uk: {
-        homeCount: inputs.homeCount,
-        residency: inputs.residency,
-      },
-
-      // 自住额外参数
-      selfuse: {
-        annualPropertyFee: parseNum(inputs.annualPropertyFeeSelf),
-      },
-
-      results: safeResults,
-      email,
-
-      // --- 你原来的 meta/inputs 结构（保留，方便 PDF 排版用） ---
-      meta: {
+      // 构造PDF需要的完整数据（包含中英文文案）
+      const payload = {
+        email,
         lang,
         purpose,
         country,
-        countryLabel: COUNTRY_NAME[lang][country],
         currency: currencySafe,
-        region: inputs.region || "",
-        project: inputs.project || "",
-        createdAtISO: new Date().toISOString(),
-        website: "mygpc.co",
-      },
-      inputs: {
-        price: priceNum,
-        monthlyRent: monthlyRentNum,
-        agentFeePct: agentFeePctNum,
-        mortgagePct: mortgagePctNum,
-        aprPct: aprPctNum,
-        annualHoldingCosts: annualHoldingCostsNum,
-        otherOneOffCosts: otherOneOffCostsNum,
-        uk: {
+        // 传递UI文案，确保PDF能渲染对应语言的文字
+        ui: UI(lang),
+        // 基础输入数据
+        inputs: {
+          price: priceNum,
+          monthlyRent: monthlyRentNum,
+          agentFeePct: agentFeePctNum,
+          mortgagePct: mortgagePctNum,
+          aprPct: aprPctNum,
+          annualHoldingCosts: annualHoldingCostsNum,
+          otherOneOffCosts: otherOneOffCostsNum,
+          annualPropertyFeeSelf: annualPropertyFeeSelfNum,
+          region: inputs.region || "",
+          project: inputs.project || "",
           homeCount: inputs.homeCount,
           residency: inputs.residency,
         },
-        selfuse: {
-          annualPropertyFee: parseNum(inputs.annualPropertyFeeSelf),
+        // 计算结果
+        results: {
+          ...result,
+          currency: currencySafe,
+          // 格式化后的金额/百分比，方便PDF直接使用
+          fmt: {
+            cashOnCashPct: fmtPct2(result.cashOnCashPct),
+            netYieldPct: fmtPct2(result.netYieldPct),
+            netAnnualRent: fmtMoney(result.netAnnualRent),
+            upfrontCosts: fmtMoney(result.upfrontCosts),
+            grossAnnualRent: fmtMoney(result.grossAnnualRent),
+            agentFeeAnnual: fmtMoney(result.agentFeeAnnual),
+            holdingAnnual: fmtMoney(result.holdingAnnual),
+            loanAmount: fmtMoney(result.loanAmount),
+            cashDeposit: fmtMoney(result.cashDeposit),
+            interestAnnual: fmtMoney(result.interestAnnual),
+            stampDuty: fmtMoney(result.stampDuty),
+            govSolicitorFeesEst: fmtMoney(result.govSolicitorFeesEst),
+            otherOneOffCosts: fmtMoney(result.otherOneOffCosts),
+            councilTaxEst: fmtMoney(result.councilTaxEst),
+            utilitiesEst: fmtMoney(result.utilitiesEst),
+            propertyFeeSelf: fmtMoney(result.propertyFeeSelf),
+            annualFixedOutgoings: fmtMoney(result.annualFixedOutgoings),
+            monthlyFixedOutgoings: fmtMoney(result.monthlyFixedOutgoings),
+            firstYearTotalOutgoings: fmtMoney(result.firstYearTotalOutgoings),
+          }
         },
-      },
-    };
+        // 元数据
+        meta: {
+          countryLabel: COUNTRY_NAME[lang][country],
+          createdAt: new Date().toLocaleString(lang === "en" ? "en-US" : "zh-CN"),
+          website: "https://www.mygpc.co"
+        }
+      };
 
-    const res = await fetch("/api/pro-report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+      // 发送请求到API
+      const res = await fetch("/api/pro-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(text || `HTTP ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => `HTTP Error: ${res.status}`);
+        throw new Error(text);
+      }
+
+      setSendStatus("sent");
+    } catch (e: any) {
+      setSendStatus("error");
+      setSendError(e?.message || "Unknown error");
     }
-
-    setSendStatus("sent");
-  } catch (e: any) {
-    setSendStatus("error");
-    setSendError(e?.message || String(e));
   }
-}
 
   return (
     <div className="min-h-screen bg-[#0b0b0b] text-white">
