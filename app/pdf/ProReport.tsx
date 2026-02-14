@@ -1,7 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import path from 'path';
 
-// 🔴 关键：单独定义组件类型，避免把组件值当类型用
+// 🔥 完整的类型定义（TS 文件中合法）
 export type ProReportProps = {
   data: {
     lang: 'zh' | 'en';
@@ -10,6 +10,7 @@ export type ProReportProps = {
     ui: Record<string, string>;
     results: {
       fmt: Record<string, string | number>;
+      breakdown?: Array<{ name: string; value: string }>;
     };
     meta: {
       countryLabel: string;
@@ -17,10 +18,16 @@ export type ProReportProps = {
       website: string;
     };
     email?: string;
+    // 新增字段的类型定义（解决 Vercel 报错）
+    createdAtISO: string;
+    brand: {
+      name: string;
+      website: string;
+    };
   };
 };
 
-// 字体注册（已修复 unicodeRange 报错）
+// 字体注册
 const fontPath = path.join(process.cwd(), 'public/fonts/');
 
 Font.register({
@@ -83,20 +90,22 @@ const styles = StyleSheet.create({
   disclaimer: { fontSize: 8, color: '#7b7b7b', marginTop: 20, textAlign: 'center' },
 });
 
-// 🔴 关键：用 ProReportProps 约束组件，不把组件本身当类型
-const ProReportComponent = ({ data }: ProReportProps) => {
-  const { lang, purpose, currency, ui, results, meta } = data;
+// 组件定义（匹配类型）
+const ProReport = ({ data }: ProReportProps) => {
+  const { lang, purpose, currency, ui, results, meta, brand } = data;
   const isInvestment = purpose === 'investment';
   
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.brand}>MyGPC <Text style={styles.brandGold}>Pro Report</Text></Text>
+          <Text style={styles.brand}>
+            {brand.name} <Text style={styles.brandGold}>Pro Report</Text>
+          </Text>
           <View>
             <Text style={styles.meta}>{meta.countryLabel} · {currency}</Text>
-            <Text style={styles.meta}>{meta.createdAt}</Text>
-            <Text style={styles.meta}>{meta.website}</Text>
+            <Text style={styles.meta}>{new Date(data.createdAtISO).toLocaleString()}</Text>
+            <Text style={styles.meta}>{brand.website}</Text>
           </View>
         </View>
 
@@ -216,5 +225,4 @@ const ProReportComponent = ({ data }: ProReportProps) => {
   );
 };
 
-// 🔴 关键：默认导出组件，名称统一为 ProReport
-export default ProReportComponent as typeof ProReportComponent;
+export default ProReport;

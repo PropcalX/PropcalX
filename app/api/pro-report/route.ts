@@ -1,110 +1,104 @@
-// app/api/pro-report/route.ts
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { Resend } from "resend";
-import { renderToBuffer } from "@react-pdf/renderer";
-import ProReportPDF from "@/app/pdf/ProReport";
+import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
+import { generateProReportPdf } from '../../pdf/renderPdf';
+import type { ProReportProps } from '../../pdf/ProReport';
 
-export const runtime = "nodejs"; // important for pdf/email
-export const dynamic = "force-dynamic";
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const schema = z.object({
-  email: z.string().email(),
-  lang: z.enum(["en", "zh"]).default("en"),
-
-  purpose: z.enum(["investment", "owner"]),
-  country: z.enum(["uk", "uae", "th", "jp"]),
-  currency: z.string().min(1).max(10),
-
-  price: z.number().nonnegative(),
-  monthlyRent: z.number().nonnegative().optional(),
-
-  mortgagePct: z.number().min(0).max(100).optional(),
-  aprPct: z.number().min(0).max(100).optional(),
-  agentFeePct: z.number().min(0).max(100).optional(),
-
-  annualHoldingCosts: z.number().nonnegative().optional(),
-  otherOneOffCosts: z.number().nonnegative().optional(),
-
-  ukResidency: z.enum(["resident", "nonResident"]).optional(),
-  ukHomeCount: z.enum(["first", "additional"]).optional(),
-
-  results: z.object({
-    upfrontCosts: z.number().nonnegative(),
-    grossAnnualRent: z.number().nonnegative(),
-    agentFeeAnnual: z.number().nonnegative(),
-    interestAnnual: z.number().nonnegative(),
-    netAnnualRent: z.number(),
-
-    netYieldPct: z.number(),
-    cashOnCashPct: z.number(),
-
-    ownerAnnualOutgoings: z.number().optional(),
-    ownerMonthlyOutgoings: z.number().optional(),
-
-    breakdown: z.array(
-      z.object({
-        label: z.string().min(1),
-        value: z.number().nonnegative(),
-      })
-    ),
-  }),
-});
-
-function subject(lang: "en" | "zh") {
-  return lang === "zh" ? "你的 MyGPC 专业版测算报告（PDF）" : "Your MyGPC Pro Report (PDF)";
-}
-function emailBody(lang: "en" | "zh") {
-  if (lang === "zh") {
-    return `你好！\n\n附件是你的 MyGPC 专业版测算报告（PDF）。\n\n提示：本报告为预估结果，仅供参考。\n\n— MyGPC`;
-  }
-  return `Hi!\n\nAttached is your MyGPC Pro Report (PDF).\n\nNote: estimates only.\n\n— MyGPC`;
-}
-
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const json = await req.json();
-    const data = schema.parse(json);
+    const payload = await req.json();
+    const { email } = payload;
 
-    const resendKey = process.env.RESEND_API_KEY;
-    const from = process.env.FROM_EMAIL;
-
-    if (!resendKey || !from) {
+    // 校验邮箱
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
-        { ok: false, error: "Missing RESEND_API_KEY or FROM_EMAIL" },
+        { success: false, error: '请提供有效的邮箱地址' },
+        { status: 400 }
+      );
+    }
+
+    // 校验核心数据
+    if (!payload.ui || !payload.results || !payload.meta) {
+      return NextResponse.json(
+        { success: false, error: 'PDF 生成所需的核心数据缺失' },
+        { status: 400 }
+      );
+    }
+
+    // 构造完整数据（包含新增字段，匹配类型）
+    const reportData: ProReportProps['data'] = {
+      ...payload,
+      createdAtISO: new Date().toISOString(),
+      brand: { 
+        name: payload.brand?.name || 'MyGPC', 
+        website: payload.brand?.website || 'mygpc.co' 
+      },
+      lang: payload.lang || 'zh',
+      purpose: payload.purpose || 'investment',
+      currency: payload.currency || '¥',
+      results: {
+        fmt: payload.results.fmt || {},
+        breakdown: payload.results.breakdown || [],
+      },
+      meta: payload.meta || {
+        countryLabel: '中国',
+        createdAt: new Date().toLocaleString(),
+        website: 'https://mygpc.co',
+      },
+      email,
+    };
+
+    // 生成 PDF
+    const pdfResult = await generateProReportPdf(reportData);
+    if (!pdfResult.success) {
+      return NextResponse.json(
+        { success: false, error: pdfResult.error },
         { status: 500 }
       );
     }
 
-    // 1) Render PDF
-    const pdfBuffer = await renderToBuffer(
-      ProReportPDF({
-        data: {
-          ...data,
-          createdAtISO: new Date().toISOString(),
-          brand: { name: "MyGPC", website: "mygpc.co" },
-        },
-      }) as any
-    );
-
-    // 2) Send email with attachment
-    const resend = new Resend(resendKey);
-    await resend.emails.send({
-      from,
-      to: data.email,
-      subject: subject(data.lang),
-      text: emailBody(data.lang),
+    // 发送邮件
+    const response = await resend.emails.send({
+      from: 'MyGPC <report@mygpc.co>',
+      to: [email],
+      subject: reportData.lang === 'zh' ? 'MyGPC 房产投资专业报告' : 'MyGPC Property Investment Pro Report',
+      html: reportData.lang === 'zh' ? '<p>您好，您的 MyGPC 房产投资报告已生成，详见附件。</p>' : '<p>Your MyGPC property investment report has been generated, please check the attachment.</p>',
       attachments: [
         {
-          filename: data.lang === "zh" ? "MyGPC-专业版报告.pdf" : "MyGPC-Pro-Report.pdf",
-          content: pdfBuffer,
+          filename: reportData.lang === 'zh' ? 'MyGPC_房产投资报告.pdf' : 'MyGPC_Investment_Report.pdf',
+          content: pdfResult.pdfBuffer,
+          contentType: 'application/pdf',
         },
       ],
     });
 
-    return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    const message = err?.message ?? "Unknown error";
-    return NextResponse.json({ ok: false, error: message }, { status: 400 });
+    return NextResponse.json({ 
+      success: true, 
+      message: reportData.lang === 'zh' ? 'PDF 已发送至您的邮箱' : 'PDF has been sent to your email',
+      response 
+    });
+
+  } catch (error) {
+    console.error('PDF 生成/邮件发送失败:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : '未知错误',
+        message: 'PDF 生成或邮件发送失败，请稍后重试'
+      },
+      { status: 500 }
+    );
   }
+}
+
+export async function GET() {
+  return NextResponse.json(
+    { 
+      success: true, 
+      message: 'MyGPC Pro Report API 已就绪',
+      note: '请使用 POST 请求提交数据生成并发送 PDF'
+    },
+    { status: 200 }
+  );
 }
