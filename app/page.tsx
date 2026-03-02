@@ -324,7 +324,7 @@ function fmtPct2(n: number) {
  * 5% 250k-925k
  * 10% 925k-1.5m
  * 12% above 1.5m
- * Additional home surcharge: +5% (MVP concept)
+ * Additional home surcharge: +5% (Updated from 3% to 5% as per Oct 2024 policy)
  * Non-resident surcharge: +2% (MVP concept)
  */
 function calcUKStampDuty(
@@ -337,37 +337,32 @@ function calcUKStampDuty(
   const isAdditional = homeCount === "additional";
   const isNonResident = residency === "nonResident";
 
-  // UK surcharge concepts (MVP):
-  // - Additional property surcharge: +3%
+  // UK surcharge concepts (Updated):
+  // - Additional property surcharge: +5% (Increased from 3% to 5%)
   // - Non-resident surcharge: +2%
-  const extra = (isAdditional ? 0.03 : 0) + (isNonResident ? 0.02 : 0);
+  const extra = (isAdditional ? 0.05 : 0) + (isNonResident ? 0.02 : 0);
 
   const bandTax = (slice: number, rate: number) =>
     slice > 0 ? slice * (rate + extra) : 0;
 
-  // === First-time buyer relief (treat "first" as first-time buyer for MVP) ===
-  // If price <= 500,000:
-  //   - 0% up to 300,000
-  //   - 5% on 300,000 to 500,000
-  // Otherwise: fall back to standard rates.
+  // === First-time buyer relief ===
   if (homeCount === "first" && p <= 500_000) {
-    const sliceAt5 = Math.max(0, Math.min(p, 500_000) - 300_000);
-    const tax = sliceAt5 * (0.05 + extra);
-    return Math.round(tax);
+    // 即使基础税免征，海外买家仍需对全额支付 extra (2%)
+    const baseTax = Math.max(0, Math.min(p, 500_000) - 300_000) * 0.05;
+    const extraTax = p * extra; 
+    return Math.round(baseTax + extraTax);
   }
 
   // === Standard SDLT rates ===
-  // 0% up to 125,000
-  // 2% 125,001 - 250,000
-  // 5% 250,001 - 925,000
-  // 10% 925,001 - 1,500,000
-  // 12% above 1,500,000
+  // 必须计算第一档 (0-125k) 的附加税，否则 42w 的结果会少算 8750
+  const s0 = Math.max(0, Math.min(p, 125_000)); 
   const s2 = Math.max(0, Math.min(p, 250_000) - 125_000);
   const s5 = Math.max(0, Math.min(p, 925_000) - 250_000);
   const s10 = Math.max(0, Math.min(p, 1_500_000) - 925_000);
   const s12 = Math.max(0, p - 1_500_000);
 
   const tax =
+    bandTax(s0, 0.00) + // 第一档基础 0%，但需乘 extra (7%)
     bandTax(s2, 0.02) +
     bandTax(s5, 0.05) +
     bandTax(s10, 0.10) +
