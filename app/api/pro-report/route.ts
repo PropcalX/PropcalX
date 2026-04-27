@@ -77,8 +77,16 @@ const payloadSchema = z.object({
 });
 
 function getMissingEnvVars() {
-  const required = ["RESEND_API_KEY", "REPORT_FROM_EMAIL"];
-  return required.filter((key) => !process.env[key]);
+  const missing: string[] = [];
+  if (!process.env.RESEND_API_KEY) missing.push("RESEND_API_KEY");
+  if (!process.env.REPORT_FROM_EMAIL && !process.env.FROM_EMAIL) {
+    missing.push("REPORT_FROM_EMAIL or FROM_EMAIL");
+  }
+  return missing;
+}
+
+function getSenderEmail() {
+  return process.env.REPORT_FROM_EMAIL || process.env.FROM_EMAIL || "";
 }
 
 export async function POST(request: NextRequest) {
@@ -126,7 +134,7 @@ export async function POST(request: NextRequest) {
       payload.lang === "zh" ? "MyGPC-Professional-Property-Report.pdf" : "MyGPC-Professional-Property-Report.pdf";
 
     const emailResult = await resend.emails.send({
-      from: process.env.REPORT_FROM_EMAIL as string,
+      from: getSenderEmail(),
       to: [payload.email],
       subject:
         payload.lang === "zh"
