@@ -19,375 +19,350 @@ Font.register({
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 34,
-    paddingBottom: 34,
-    paddingHorizontal: 34,
-    backgroundColor: "#f6f2e8",
+    paddingTop: 28,
+    paddingBottom: 30,
+    paddingHorizontal: 28,
+    backgroundColor: "#f7f2e8",
     fontFamily: "MyGPCSans",
     color: "#14202a",
-    fontSize: 10.5,
+    fontSize: 10,
   },
   hero: {
     backgroundColor: "#0b1720",
     borderRadius: 18,
-    padding: 22,
-    marginBottom: 18,
+    padding: 18,
+    marginBottom: 16,
   },
-  heroTop: {
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 10,
   },
   heroBrand: {
     color: "#d7c28a",
     fontSize: 11,
     textTransform: "uppercase",
-    letterSpacing: 1.4,
+    letterSpacing: 1.3,
   },
   heroTitle: {
     marginTop: 6,
     color: "#ffffff",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 700,
-    maxWidth: 300,
-    lineHeight: 1.2,
   },
   heroMeta: {
     alignItems: "flex-end",
-    color: "#b8c0c5",
-    fontSize: 9.5,
-    gap: 4,
+    color: "#c1c6ca",
+    fontSize: 9,
+    gap: 3,
   },
-  heroGrid: {
+  kpiRow: {
     flexDirection: "row",
     gap: 10,
-    marginTop: 18,
+    marginTop: 14,
   },
-  heroCard: {
+  kpiCard: {
     flexGrow: 1,
     flexBasis: 0,
     backgroundColor: "#132430",
+    borderRadius: 12,
+    padding: 12,
+  },
+  kpiLabel: {
+    color: "#d7c28a",
+    fontSize: 8,
+    textTransform: "uppercase",
+  },
+  kpiValue: {
+    marginTop: 5,
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: 700,
+  },
+  sectionTitle: {
+    marginTop: 10,
+    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: 700,
+    color: "#13202a",
+  },
+  panel: {
+    backgroundColor: "#ffffff",
+    border: "1 solid #e7dcc0",
     borderRadius: 14,
     padding: 12,
   },
-  heroCardLabel: {
-    color: "#d7c28a",
-    fontSize: 8.5,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  heroCardValue: {
-    marginTop: 6,
-    color: "#ffffff",
-    fontSize: 16,
+  panelTitle: {
+    fontSize: 9,
+    color: "#8d6f27",
     fontWeight: 700,
-  },
-  heroCardSub: {
-    marginTop: 4,
-    color: "#b8c0c5",
-    fontSize: 8.5,
-    lineHeight: 1.35,
-  },
-  section: {
-    marginTop: 10,
-  },
-  sectionTitle: {
-    fontSize: 11.5,
-    fontWeight: 700,
-    color: "#0d1e29",
     marginBottom: 8,
   },
-  sectionIntro: {
-    color: "#42535d",
-    lineHeight: 1.45,
-    marginBottom: 10,
-  },
-  twoCol: {
+  split: {
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
-  panel: {
+  half: {
     flexGrow: 1,
     flexBasis: 0,
-    backgroundColor: "#ffffff",
-    borderRadius: 14,
-    border: "1 solid #e4d7b6",
-    padding: 14,
   },
-  panelTitle: {
-    fontSize: 10,
-    color: "#8b6e24",
-    fontWeight: 700,
-    marginBottom: 8,
-  },
-  keyValueRow: {
+  kvRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    gap: 10,
-    paddingVertical: 5,
-    borderBottom: "1 solid #ece8dd",
-  },
-  keyValueRowLast: {
-    borderBottom: "none",
-  },
-  keyLabel: {
-    color: "#43535d",
-  },
-  keyValue: {
-    color: "#0e1b24",
-    fontWeight: 700,
-  },
-  miniGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     gap: 8,
+    paddingVertical: 5,
+    borderBottom: "1 solid #eee8da",
   },
-  miniCell: {
-    width: "48%",
-    backgroundColor: "#fffaf1",
-    borderRadius: 10,
-    padding: 10,
-    border: "1 solid #efe2be",
+  kvKey: {
+    color: "#51616c",
   },
-  miniLabel: {
-    fontSize: 8.5,
-    color: "#8b6e24",
-  },
-  miniValue: {
-    marginTop: 4,
-    fontSize: 12.5,
+  kvValue: {
+    color: "#0f1c24",
     fontWeight: 700,
   },
   table: {
-    borderRadius: 14,
+    borderRadius: 12,
+    border: "1 solid #e5dbc2",
     overflow: "hidden",
-    border: "1 solid #e7dec8",
   },
-  tableHeader: {
+  tableHead: {
     flexDirection: "row",
     backgroundColor: "#10202b",
-    color: "#ffffff",
-    fontWeight: 700,
   },
   tableRow: {
     flexDirection: "row",
     backgroundColor: "#ffffff",
-    borderBottom: "1 solid #ede6d7",
+    borderBottom: "1 solid #eee6d4",
   },
-  cell: {
-    flexGrow: 1,
-    flexBasis: 0,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    fontSize: 9.5,
+  cellLabel: {
+    flexGrow: 2.3,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    color: "#23343f",
   },
-  listItem: {
-    marginTop: 5,
-    color: "#34434d",
-    lineHeight: 1.45,
+  cellValue: {
+    flexGrow: 1.2,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    color: "#10202b",
+    textAlign: "right",
+  },
+  cellValueStrong: {
+    fontWeight: 700,
+  },
+  headCell: {
+    color: "#ffffff",
+    fontWeight: 700,
   },
   footer: {
-    marginTop: 16,
-    paddingTop: 10,
-    borderTop: "1 solid #d8ccb0",
-    color: "#596972",
-    fontSize: 8.5,
-    lineHeight: 1.4,
+    marginTop: 12,
+    paddingTop: 8,
+    borderTop: "1 solid #dbcfae",
+    color: "#5d6a71",
+    fontSize: 8.3,
+    lineHeight: 1.35,
+  },
+  note: {
+    marginTop: 8,
+    color: "#556770",
+    lineHeight: 1.45,
   },
 });
 
-function rowStyle(index: number, total: number) {
-  return total - 1 === index ? [styles.keyValueRow, styles.keyValueRowLast] : styles.keyValueRow;
+function gbp(value: number) {
+  return `GBP ${Math.round(value || 0).toLocaleString("en-GB")}`;
+}
+
+function cny(value: number, rate: number) {
+  return `CNY ${Math.round((value || 0) * rate).toLocaleString("en-GB")}`;
+}
+
+function pct(value: number) {
+  return `${(value || 0).toFixed(2)}%`;
+}
+
+function Table({
+  rows,
+  rate,
+  includeCny = true,
+}: {
+  rows: Array<{ label: string; value: number; date?: string; strong?: boolean }>;
+  rate: number;
+  includeCny?: boolean;
+}) {
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHead}>
+          <Text style={[styles.cellLabel, styles.headCell]}>Line item</Text>
+          <Text style={[styles.cellValue, styles.headCell]}>GBP</Text>
+          {includeCny ? <Text style={[styles.cellValue, styles.headCell]}>CNY</Text> : null}
+      </View>
+      {rows.map((row, index) => (
+        <View
+          key={`${row.label}-${index}`}
+          style={index === rows.length - 1 ? [styles.tableRow, { borderBottom: "none" }] : styles.tableRow}
+        >
+          <Text style={styles.cellLabel}>{row.date ? `${row.date} · ${row.label}` : row.label}</Text>
+          <Text style={row.strong ? [styles.cellValue, styles.cellValueStrong] : styles.cellValue}>{gbp(row.value)}</Text>
+          {includeCny ? (
+            <Text style={row.strong ? [styles.cellValue, styles.cellValueStrong] : styles.cellValue}>{cny(row.value, rate)}</Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export default function ProReport({ data }: ProReportProps) {
-  const isInvestment = data.purpose === "investment";
-  const currency = data.currency;
-  const projectLabel = data.inputs.project || data.inputs.region || data.meta.countryLabel;
+  const fb = data.financialBreakdown;
+  const rent = data.rentalMarket;
 
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.hero}>
-          <View style={styles.heroTop}>
+          <View style={styles.row}>
             <View>
               <Text style={styles.heroBrand}>{data.brand.name}</Text>
-              <Text style={styles.heroTitle}>
-                {isInvestment ? "Professional Property Investment Report" : "Professional Property Cost Report"}
-              </Text>
+              <Text style={styles.heroTitle}>Financial Breakdown Report</Text>
             </View>
             <View style={styles.heroMeta}>
-              <Text>{projectLabel}</Text>
-              <Text>{data.meta.countryLabel}</Text>
+              <Text>{fb.development || data.reportDetails.development || data.inputs.project}</Text>
+              <Text>{fb.postcode || data.reportDetails.postcode || data.meta.countryLabel}</Text>
               <Text>{data.meta.createdAt}</Text>
               <Text>{data.brand.website}</Text>
             </View>
           </View>
 
-          <View style={styles.heroGrid}>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroCardLabel}>
-                {isInvestment ? data.ui.netYield : data.ui.annualFixed}
-              </Text>
-              <Text style={styles.heroCardValue}>
-                {isInvestment ? data.results.fmt.netYieldPct : `${currency} ${data.results.fmt.annualFixedOutgoings}`}
-              </Text>
-              <Text style={styles.heroCardSub}>{data.ui.reportSummaryText}</Text>
+          <View style={styles.kpiRow}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Discounted Price</Text>
+              <Text style={styles.kpiValue}>{gbp(fb.discountedPrice)}</Text>
             </View>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroCardLabel}>
-                {isInvestment ? data.ui.netAnnualRent : data.ui.firstYear}
-              </Text>
-              <Text style={styles.heroCardValue}>
-                {isInvestment
-                  ? `${currency} ${data.results.fmt.netAnnualRent}`
-                  : `${currency} ${data.results.fmt.firstYearTotalOutgoings}`}
-              </Text>
-              <Text style={styles.heroCardSub}>{data.ui.noteGov}</Text>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Annual Rental Income</Text>
+              <Text style={styles.kpiValue}>{gbp(fb.annualRentalIncome)}</Text>
             </View>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroCardLabel}>{data.ui.upfrontCosts}</Text>
-              <Text style={styles.heroCardValue}>{currency} {data.results.fmt.upfrontCosts}</Text>
-              <Text style={styles.heroCardSub}>{data.ui.paymentPlanHint}</Text>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiLabel}>Cash Yield</Text>
+              <Text style={styles.kpiValue}>{pct(fb.netAnnualYieldPct)}</Text>
             </View>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{data.ui.reportSummaryTitle}</Text>
-          <Text style={styles.sectionIntro}>{data.ui.reportSummaryText}</Text>
-          <View style={styles.twoCol}>
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>{data.ui.propertySnapshot}</Text>
-              {[
-                [data.ui.countryLabel, data.meta.countryLabel],
-                [data.ui.currencyLabel, currency],
-                [data.ui.project, data.inputs.project || "-"],
-                [data.ui.region, data.inputs.region || "-"],
-              ].map(([label, value], index, arr) => (
-                <View key={label} style={rowStyle(index, arr.length)}>
-                  <Text style={styles.keyLabel}>{label}</Text>
-                  <Text style={styles.keyValue}>{value}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>{data.ui.buyerProfile}</Text>
-              {[
-                [data.ui.purpose, isInvestment ? data.ui.purposeInvestment : data.ui.purposeSelfuse],
-                [data.ui.homeCount, data.inputs.homeCount === "first" ? data.ui.first : data.ui.additional],
-                [data.ui.residency, data.inputs.residency === "resident" ? data.ui.resident : data.ui.nonResident],
-                [data.ui.websiteLabel, data.meta.website],
-              ].map(([label, value], index, arr) => (
-                <View key={label} style={rowStyle(index, arr.length)}>
-                  <Text style={styles.keyLabel}>{label}</Text>
-                  <Text style={styles.keyValue}>{value}</Text>
-                </View>
-              ))}
-            </View>
+        <Text style={styles.sectionTitle}>Property snapshot</Text>
+        <View style={styles.split}>
+          <View style={[styles.panel, styles.half]}>
+            <Text style={styles.panelTitle}>Property details</Text>
+            {[
+              ["Development", fb.development || "-"],
+              ["Plot Number", fb.plotNumber || "-"],
+              ["Level / Aspect", fb.levelAspect || "-"],
+              ["Postcode", fb.postcode || "-"],
+              ["Property Type", data.reportDetails.propertyType || "-"],
+              ["Bedrooms", data.reportDetails.bedrooms || "-"],
+            ].map(([key, value]) => (
+              <View key={key} style={styles.kvRow}>
+                <Text style={styles.kvKey}>{key}</Text>
+                <Text style={styles.kvValue}>{value}</Text>
+              </View>
+            ))}
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{data.ui.assumptions}</Text>
-          <View style={styles.miniGrid}>
-            <View style={styles.miniCell}>
-              <Text style={styles.miniLabel}>{data.ui.price}</Text>
-              <Text style={styles.miniValue}>{currency} {data.inputs.price.toLocaleString()}</Text>
-            </View>
-            <View style={styles.miniCell}>
-              <Text style={styles.miniLabel}>{data.ui.monthlyRent}</Text>
-              <Text style={styles.miniValue}>{currency} {data.inputs.monthlyRent.toLocaleString()}</Text>
-            </View>
-            <View style={styles.miniCell}>
-              <Text style={styles.miniLabel}>{data.ui.mortgagePct}</Text>
-              <Text style={styles.miniValue}>{data.inputs.mortgagePct}%</Text>
-            </View>
-            <View style={styles.miniCell}>
-              <Text style={styles.miniLabel}>{data.ui.aprPct}</Text>
-              <Text style={styles.miniValue}>{data.inputs.aprPct}%</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{data.ui.breakdown}</Text>
-          <View style={styles.twoCol}>
-            <View style={styles.panel}>
-              {[
-                [data.ui.stampDuty, `${currency} ${data.results.fmt.stampDuty}`],
-                [data.ui.govFees, `${currency} ${data.results.fmt.govSolicitorFeesEst}`],
-                [data.ui.otherOneOffCosts, `${currency} ${data.results.fmt.otherOneOffCosts}`],
-                [data.ui.upfrontCosts, `${currency} ${data.results.fmt.upfrontCosts}`],
-              ].map(([label, value], index, arr) => (
-                <View key={label} style={rowStyle(index, arr.length)}>
-                  <Text style={styles.keyLabel}>{label}</Text>
-                  <Text style={styles.keyValue}>{value}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.panel}>
-              {isInvestment
-                ? [
-                    [data.ui.grossAnnualRent, `${currency} ${data.results.fmt.grossAnnualRent}`],
-                    [data.ui.agentFeeAnnual, `${currency} ${data.results.fmt.agentFeeAnnual}`],
-                    [data.ui.holdingAnnual, `${currency} ${data.results.fmt.holdingAnnual}`],
-                    [data.ui.interestAnnual, `${currency} ${data.results.fmt.interestAnnual}`],
-                    [data.ui.netAnnualRent, `${currency} ${data.results.fmt.netAnnualRent}`],
-                  ].map(([label, value], index, arr) => (
-                    <View key={label} style={rowStyle(index, arr.length)}>
-                      <Text style={styles.keyLabel}>{label}</Text>
-                      <Text style={styles.keyValue}>{value}</Text>
-                    </View>
-                  ))
-                : [
-                    [data.ui.councilTax, `${currency} ${data.results.fmt.councilTaxEst}`],
-                    [data.ui.utilities, `${currency} ${data.results.fmt.utilitiesEst}`],
-                    [data.ui.holdingAnnual, `${currency} ${data.results.fmt.holdingAnnual}`],
-                    [data.ui.propertyFeeSelf, `${currency} ${data.results.fmt.propertyFeeSelf}`],
-                    [data.ui.annualFixed, `${currency} ${data.results.fmt.annualFixedOutgoings}`],
-                  ].map(([label, value], index, arr) => (
-                    <View key={label} style={rowStyle(index, arr.length)}>
-                      <Text style={styles.keyLabel}>{label}</Text>
-                      <Text style={styles.keyValue}>{value}</Text>
-                    </View>
-                  ))}
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{data.ui.paymentPlan}</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <Text style={styles.cell}>Stage</Text>
-              <Text style={styles.cell}>Amount</Text>
-            </View>
-            {data.results.paymentPlan.map((item, index) => (
-              <View
-                key={item.label}
-                style={
-                  index === data.results.paymentPlan.length - 1
-                    ? [styles.tableRow, { borderBottom: "none" }]
-                    : styles.tableRow
-                }
-              >
-                <Text style={styles.cell}>{item.label}</Text>
-                <Text style={styles.cell}>{currency} {item.value.toLocaleString()}</Text>
+          <View style={[styles.panel, styles.half]}>
+            <Text style={styles.panelTitle}>Area and pricing</Text>
+            {[
+              ["Internal area (sqft)", fb.internalAreaSqft.toLocaleString("en-GB")],
+              ["Internal area (sqm)", fb.internalAreaSqm.toLocaleString("en-GB")],
+              ["Total area (sqm)", fb.totalAreaSqm.toLocaleString("en-GB")],
+              ["Asking price", gbp(fb.askingPrice)],
+              ["Discounted price", gbp(fb.discountedPrice)],
+              ["FX rate", `1 GBP = ${fb.cnyRate} CNY`],
+            ].map(([key, value]) => (
+              <View key={key} style={styles.kvRow}>
+                <Text style={styles.kvKey}>{key}</Text>
+                <Text style={styles.kvValue}>{value}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{data.ui.nextSteps}</Text>
-          {data.ui.nextStepsItems.map((item) => (
-            <Text key={item} style={styles.listItem}>
-              • {item}
-            </Text>
-          ))}
+        <Text style={styles.sectionTitle}>Rental and profit summary</Text>
+        <View style={styles.split}>
+          <View style={[styles.panel, styles.half]}>
+            <Text style={styles.panelTitle}>Cash purchase scenario</Text>
+            {[
+              ["Monthly rent", gbp(fb.monthlyRent)],
+              ["Rental pw", `GBP ${fb.rentalPerWeek.toLocaleString("en-GB")}`],
+              ["Annual rental income", gbp(fb.annualRentalIncome)],
+              ["Annual maintenance fee", gbp(fb.annualMaintenanceFee)],
+              ["Other annual holding costs", gbp(fb.annualHoldingCosts)],
+              ["Annual cash profit", gbp(fb.annualCashProfit)],
+              ["Net annual yield", pct(fb.netAnnualYieldPct)],
+            ].map(([key, value]) => (
+              <View key={key} style={styles.kvRow}>
+                <Text style={styles.kvKey}>{key}</Text>
+                <Text style={styles.kvValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={[styles.panel, styles.half]}>
+            <Text style={styles.panelTitle}>Mortgage scenario</Text>
+            {[
+              ["Loan amount", gbp(fb.loanAmount)],
+              ["Annual interest cost", gbp(fb.annualInterestCost)],
+              ["Annual leveraged profit", gbp(fb.annualLeveragedProfit)],
+              ["Leveraged yield", pct(fb.leveragedYieldPct)],
+            ].map(([key, value]) => (
+              <View key={key} style={styles.kvRow}>
+                <Text style={styles.kvKey}>{key}</Text>
+                <Text style={styles.kvValue}>{value}</Text>
+              </View>
+            ))}
+            {rent ? (
+              <Text style={styles.note}>
+                Rightmove evidence: median {gbp(rent.medianPcm)} pcm, average {gbp(rent.averagePcm)} pcm, based on {rent.listingCount} nearby listings.
+              </Text>
+            ) : (
+              <Text style={styles.note}>Rightmove rental evidence was not attached to this report.</Text>
+            )}
+          </View>
         </View>
+
+        <Text style={styles.sectionTitle}>One-off buying costs</Text>
+        <Table
+          rate={fb.cnyRate}
+          rows={[
+            ...fb.feeLines.map((item) => ({ label: item.label, value: item.value })),
+            { label: "Total one-off buying costs", value: fb.oneOffCostsTotal, strong: true },
+            { label: "Total purchase cost", value: fb.totalPurchaseCost, strong: true },
+          ]}
+        />
+
+        <Text style={styles.sectionTitle}>Payment plan</Text>
+        <Table
+          rate={fb.cnyRate}
+          rows={fb.paymentPlan.map((item) => ({
+            label: item.label,
+            value: item.value,
+            date: item.date,
+          }))}
+        />
+
+        {rent ? (
+          <>
+            <Text style={styles.sectionTitle}>Rightmove market evidence</Text>
+            <Table
+              rate={fb.cnyRate}
+              includeCny={false}
+              rows={rent.sampleListings.map((item) => ({
+                label: `${item.title}${item.bedrooms ? ` · ${item.bedrooms} bed` : ""}${item.propertyType ? ` · ${item.propertyType}` : ""}`,
+                value: item.pricePcm,
+              }))}
+            />
+          </>
+        ) : null}
+
+        {fb.notes ? <Text style={styles.note}>Notes: {fb.notes}</Text> : null}
 
         <Text style={styles.footer}>{data.ui.disclaimer}</Text>
       </Page>

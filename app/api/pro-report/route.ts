@@ -28,6 +28,87 @@ const payloadSchema = z.object({
     homeCount: z.enum(["first", "additional"]),
     residency: z.enum(["resident", "nonResident"]),
   }),
+  reportDetails: z.object({
+    email: z.string().email(),
+    postcode: z.string(),
+    development: z.string(),
+    plotNumber: z.string(),
+    levelAspect: z.string(),
+    propertyType: z.string(),
+    bedrooms: z.string(),
+    internalAreaSqft: z.string(),
+    internalAreaSqm: z.string(),
+    totalAreaSqm: z.string(),
+    askingPrice: z.string(),
+    discountPct: z.string(),
+    fxRate: z.string(),
+    legalFee: z.string(),
+    stampDutyAdminFee: z.string(),
+    amlCheckFee: z.string(),
+    landRegistryFee: z.string(),
+    landSearchFee: z.string(),
+    leaseholdFee: z.string(),
+    chapsFee: z.string(),
+    annualMaintenanceFee: z.string(),
+    serviceChargePerSqft: z.string(),
+    monthlyRentOverride: z.string(),
+    reservationFee: z.string(),
+    exchangeDepositPct: z.string(),
+    completionDate: z.string(),
+    notes: z.string(),
+  }),
+  rentalMarket: z
+    .object({
+      postcode: z.string(),
+      source: z.literal("rightmove"),
+      searchUrl: z.string(),
+      averagePcm: z.number(),
+      medianPcm: z.number(),
+      minPcm: z.number(),
+      maxPcm: z.number(),
+      listingCount: z.number(),
+      sampleListings: z.array(
+        z.object({
+          title: z.string(),
+          pricePcm: z.number(),
+          bedrooms: z.number().optional(),
+          propertyType: z.string().optional(),
+          url: z.string().optional(),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
+  financialBreakdown: z.object({
+    currency: z.string(),
+    cnyRate: z.number(),
+    development: z.string(),
+    plotNumber: z.string(),
+    levelAspect: z.string(),
+    postcode: z.string(),
+    internalAreaSqft: z.number(),
+    internalAreaSqm: z.number(),
+    totalAreaSqm: z.number(),
+    askingPrice: z.number(),
+    discountedPrice: z.number(),
+    monthlyRent: z.number(),
+    annualRentalIncome: z.number(),
+    rentalPerWeek: z.number(),
+    annualMaintenanceFee: z.number(),
+    annualHoldingCosts: z.number(),
+    totalAnnualPropertyCosts: z.number(),
+    annualCashProfit: z.number(),
+    annualLeveragedProfit: z.number(),
+    netAnnualYieldPct: z.number(),
+    leveragedYieldPct: z.number(),
+    loanAmount: z.number(),
+    annualInterestCost: z.number(),
+    feeLines: z.array(z.object({ label: z.string(), value: z.number() })),
+    oneOffCostsTotal: z.number(),
+    totalPurchaseCost: z.number(),
+    paymentPlan: z.array(z.object({ label: z.string(), date: z.string().optional(), value: z.number() })),
+    notes: z.string(),
+  }),
   results: z.object({
     currency: z.string(),
     stampDuty: z.number(),
@@ -49,19 +130,8 @@ const payloadSchema = z.object({
     annualFixedOutgoings: z.number(),
     monthlyFixedOutgoings: z.number(),
     firstYearTotalOutgoings: z.number(),
-    paymentPlan: z.array(
-      z.object({
-        label: z.string(),
-        value: z.number(),
-      }),
-    ),
-    sensitivity: z.array(
-      z.object({
-        apr: z.number(),
-        rentFactor: z.number(),
-        cocPct: z.number(),
-      }),
-    ),
+    paymentPlan: z.array(z.object({ label: z.string(), value: z.number() })),
+    sensitivity: z.array(z.object({ apr: z.number(), rentFactor: z.number(), cocPct: z.number() })),
     fmt: z.record(z.string(), z.string()),
   }),
   meta: z.object({
@@ -118,35 +188,25 @@ export async function POST(request: NextRequest) {
 
     const payload = parsed.data as ProReportPayload;
     const pdfResult = await generateProReportPdf(payload);
-
     if (!pdfResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: pdfResult.error,
-        },
-        { status: 500 },
-      );
+      return NextResponse.json({ success: false, error: pdfResult.error }, { status: 500 });
     }
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const filename =
-      payload.lang === "zh" ? "MyGPC-Professional-Property-Report.pdf" : "MyGPC-Professional-Property-Report.pdf";
-
     const emailResult = await resend.emails.send({
       from: getSenderEmail(),
       to: [payload.email],
       subject:
         payload.lang === "zh"
-          ? "MyGPC 专业房产测算报告"
-          : "Your MyGPC Professional Property Report",
+          ? "MyGPC Financial Breakdown 专业报告"
+          : "Your MyGPC Financial Breakdown Report",
       html:
         payload.lang === "zh"
-          ? `<p>您好，您的 MyGPC 专业房产测算报告已经生成，详见附件。</p><p>如果你希望获取更详细的项目建议，可以直接回复这封邮件。</p>`
-          : `<p>Your MyGPC professional property report is ready and attached.</p><p>If you want a more detailed project recommendation, you can simply reply to this email.</p>`,
+          ? "<p>您好，您的 MyGPC Financial Breakdown 专业报告已经生成，详见附件。</p><p>如需进一步修改项目参数，可以直接回复这封邮件。</p>"
+          : "<p>Your MyGPC Financial Breakdown report is ready and attached.</p><p>If you want to refine the project assumptions, simply reply to this email.</p>",
       attachments: [
         {
-          filename,
+          filename: "MyGPC-Professional-Property-Report.pdf",
           content: pdfResult.pdfBuffer,
         },
       ],
@@ -154,8 +214,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message:
-        payload.lang === "zh" ? "报告已发送到客户邮箱" : "The report has been sent to the client email.",
+      message: payload.lang === "zh" ? "报告已发送到客户邮箱" : "The report has been sent to the client email.",
       emailResult,
     });
   } catch (error) {
@@ -173,6 +232,6 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     success: true,
-    message: "MyGPC professional report endpoint is ready.",
+    message: "MyGPC financial breakdown report endpoint is ready.",
   });
 }
