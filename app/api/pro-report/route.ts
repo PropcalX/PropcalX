@@ -1,105 +1,170 @@
-export const dynamic = 'force-dynamic';
-import { NextRequest, NextResponse } from 'next/server';
-import { Resend } from 'resend';
-import { generateProReportPdf } from '../../pdf/renderPdf';
-import type { ProReportProps } from '../../pdf/ProReport';
+import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
+import { z } from "zod";
+import { generateProReportPdf } from "../../pdf/renderPdf";
+import type { ProReportPayload } from "../../lib/reporting";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+const payloadSchema = z.object({
+  email: z.string().email(),
+  lang: z.enum(["en", "zh"]),
+  purpose: z.enum(["investment", "owner"]),
+  country: z.enum(["uk", "uae", "th", "jp"]),
+  currency: z.string().min(1),
+  ui: z.record(z.string(), z.any()),
+  inputs: z.object({
+    price: z.number(),
+    monthlyRent: z.number(),
+    agentFeePct: z.number(),
+    mortgagePct: z.number(),
+    aprPct: z.number(),
+    annualHoldingCosts: z.number(),
+    otherOneOffCosts: z.number(),
+    annualPropertyFeeSelf: z.number(),
+    region: z.string(),
+    project: z.string(),
+    homeCount: z.enum(["first", "additional"]),
+    residency: z.enum(["resident", "nonResident"]),
+  }),
+  results: z.object({
+    currency: z.string(),
+    stampDuty: z.number(),
+    govSolicitorFeesEst: z.number(),
+    otherOneOffCosts: z.number(),
+    upfrontCosts: z.number(),
+    loanAmount: z.number(),
+    cashDeposit: z.number(),
+    interestAnnual: z.number(),
+    grossAnnualRent: z.number(),
+    agentFeeAnnual: z.number(),
+    holdingAnnual: z.number(),
+    netAnnualRent: z.number(),
+    netYieldPct: z.number(),
+    cashOnCashPct: z.number(),
+    councilTaxEst: z.number(),
+    utilitiesEst: z.number(),
+    propertyFeeSelf: z.number(),
+    annualFixedOutgoings: z.number(),
+    monthlyFixedOutgoings: z.number(),
+    firstYearTotalOutgoings: z.number(),
+    paymentPlan: z.array(
+      z.object({
+        label: z.string(),
+        value: z.number(),
+      }),
+    ),
+    sensitivity: z.array(
+      z.object({
+        apr: z.number(),
+        rentFactor: z.number(),
+        cocPct: z.number(),
+      }),
+    ),
+    fmt: z.record(z.string(), z.string()),
+  }),
+  meta: z.object({
+    countryLabel: z.string(),
+    createdAt: z.string(),
+    website: z.string(),
+  }),
+  createdAtISO: z.string(),
+  brand: z.object({
+    name: z.string(),
+    website: z.string(),
+  }),
+});
+
+function getMissingEnvVars() {
+  const required = ["RESEND_API_KEY", "REPORT_FROM_EMAIL"];
+  return required.filter((key) => !process.env[key]);
+}
+
+export async function POST(request: NextRequest) {
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
-    const payload = await req.json();
-    const { email } = payload;
+    const rawPayload = await request.json();
+    const parsed = payloadSchema.safeParse(rawPayload);
 
-    // 校验邮箱
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: '请提供有效的邮箱地址' },
-        { status: 400 }
+        {
+          success: false,
+          error: "Invalid report payload",
+          details: parsed.error.flatten(),
+        },
+        { status: 400 },
       );
     }
 
-    // 校验核心数据
-    if (!payload.ui || !payload.results || !payload.meta) {
+    const missingEnv = getMissingEnvVars();
+    if (missingEnv.length > 0) {
       return NextResponse.json(
-        { success: false, error: 'PDF 生成所需的核心数据缺失' },
-        { status: 400 }
+        {
+          success: false,
+          error: `Missing required environment variables: ${missingEnv.join(", ")}`,
+        },
+        { status: 500 },
       );
     }
 
-    // 构造完整数据（包含新增字段，匹配类型）
-    const reportData: ProReportProps['data'] = {
-      ...payload,
-      createdAtISO: new Date().toISOString(),
-      brand: { 
-        name: payload.brand?.name || 'MyGPC', 
-        website: payload.brand?.website || 'mygpc.co' 
-      },
-      lang: payload.lang || 'zh',
-      purpose: payload.purpose || 'investment',
-      currency: payload.currency || '¥',
-      results: {
-        fmt: payload.results.fmt || {},
-        breakdown: payload.results.breakdown || [],
-      },
-      meta: payload.meta || {
-        countryLabel: '中国',
-        createdAt: new Date().toLocaleString(),
-        website: 'https://mygpc.co',
-      },
-      email,
-    };
+    const payload = parsed.data as ProReportPayload;
+    const pdfResult = await generateProReportPdf(payload);
 
-    // 生成 PDF
-    const pdfResult = await generateProReportPdf(reportData);
     if (!pdfResult.success) {
       return NextResponse.json(
-        { success: false, error: pdfResult.error },
-        { status: 500 }
+        {
+          success: false,
+          error: pdfResult.error,
+        },
+        { status: 500 },
       );
     }
 
-    // 发送邮件
-    const response = await resend.emails.send({
-      from: 'MyGPC <report@mygpc.co>',
-      to: [email],
-      subject: reportData.lang === 'zh' ? 'MyGPC 房产投资专业报告' : 'MyGPC Property Investment Pro Report',
-      html: reportData.lang === 'zh' ? '<p>您好，您的 MyGPC 房产投资报告已生成，详见附件。</p>' : '<p>Your MyGPC property investment report has been generated, please check the attachment.</p>',
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const filename =
+      payload.lang === "zh" ? "MyGPC-Professional-Property-Report.pdf" : "MyGPC-Professional-Property-Report.pdf";
+
+    const emailResult = await resend.emails.send({
+      from: process.env.REPORT_FROM_EMAIL as string,
+      to: [payload.email],
+      subject:
+        payload.lang === "zh"
+          ? "MyGPC 专业房产测算报告"
+          : "Your MyGPC Professional Property Report",
+      html:
+        payload.lang === "zh"
+          ? `<p>您好，您的 MyGPC 专业房产测算报告已经生成，详见附件。</p><p>如果你希望获取更详细的项目建议，可以直接回复这封邮件。</p>`
+          : `<p>Your MyGPC professional property report is ready and attached.</p><p>If you want a more detailed project recommendation, you can simply reply to this email.</p>`,
       attachments: [
         {
-          filename: reportData.lang === 'zh' ? 'MyGPC_房产投资报告.pdf' : 'MyGPC_Investment_Report.pdf',
+          filename,
           content: pdfResult.pdfBuffer,
-          contentType: 'application/pdf',
         },
       ],
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: reportData.lang === 'zh' ? 'PDF 已发送至您的邮箱' : 'PDF has been sent to your email',
-      response 
+    return NextResponse.json({
+      success: true,
+      message:
+        payload.lang === "zh" ? "报告已发送到客户邮箱" : "The report has been sent to the client email.",
+      emailResult,
     });
-
   } catch (error) {
-    console.error('PDF 生成/邮件发送失败:', error);
+    console.error("Failed to generate or send report", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : '未知错误',
-        message: 'PDF 生成或邮件发送失败，请稍后重试'
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown server error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
 
 export async function GET() {
-  return NextResponse.json(
-    { 
-      success: true, 
-      message: 'MyGPC Pro Report API 已就绪',
-      note: '请使用 POST 请求提交数据生成并发送 PDF'
-    },
-    { status: 200 }
-  );
+  return NextResponse.json({
+    success: true,
+    message: "MyGPC professional report endpoint is ready.",
+  });
 }

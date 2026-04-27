@@ -1,22 +1,18 @@
-import { renderToBuffer } from '@react-pdf/renderer';
-import React, { ReactElement } from 'react';
-import ProReport from './ProReport';
-import type { ProReportProps } from './ProReport';
+import { renderToBuffer } from "@react-pdf/renderer";
+import React from "react";
+import ProReport from "./ProReport";
+import type { ProReportPayload } from "../lib/reporting";
 
-export async function generateProReportPdf(data: ProReportProps['data']) {
+export async function generateProReportPdf(data: ProReportPayload) {
   try {
-    // 解决方法：显式创建一个元素，并确保 ProReport 内部使用了 <Document>
-    // 如果 ProReport 内部没有 <Document>，请看下方的 ProReport 修改建议
-    const pdfComponent = React.createElement(ProReport, { data }) as ReactElement;
-    
-    const pdfBuffer = await renderToBuffer(pdfComponent as any);
-    
+    const component = React.createElement(ProReport, { data });
+    const pdfBuffer = await renderToBuffer(component as any);
     return { success: true, pdfBuffer } as const;
   } catch (error) {
-    console.error('PDF 生成失败:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'PDF 生成未知错误' 
+    console.error("Failed to render PDF", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown PDF rendering error",
     } as const;
   }
 }
